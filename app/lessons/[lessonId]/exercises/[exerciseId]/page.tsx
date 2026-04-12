@@ -191,6 +191,11 @@ export default function ExercisePage() {
     const seconds = totalSeconds % 60;
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
+  //拖动音频同步更新subtiles
+  const syncCurrentPosition = (ms: number) => {
+    const clamped = Math.max(0, Math.min(ms, durationMs || 0));
+    setCurrentMs(clamped);
+  };
 
   const handleVolumeChange = (value: number) => {
     setVolume(value);
@@ -207,9 +212,10 @@ export default function ExercisePage() {
 
   const handleSeek = (value: number) => {
     if (!wsRef.current || durationMs === 0) return;
+
     const clamped = Math.max(0, Math.min(value, durationMs));
     wsRef.current.seekTo(clamped / durationMs);
-    setCurrentMs(clamped);
+    syncCurrentPosition(clamped);
   };
 
   /* ========= Controls ========= */
@@ -221,8 +227,12 @@ export default function ExercisePage() {
 
   const seekTo = (ms: number) => {
     if (!wsRef.current) return;
+
     const duration = wsRef.current.getDuration() * 1000;
-    wsRef.current.seekTo(ms / duration);
+    const clamped = Math.max(0, Math.min(ms, duration));
+
+    wsRef.current.seekTo(clamped / duration);
+    syncCurrentPosition(clamped);
     wsRef.current.play();
     setIsPlaying(true);
   };
@@ -309,7 +319,9 @@ export default function ExercisePage() {
                       min={0}
                       max={durationMs}
                       value={Math.min(currentMs, durationMs)}
-                      onChange={(e) => handleSeek(Number(e.target.value))}
+                      onInput={(e) =>
+                        handleSeek(Number((e.target as HTMLInputElement).value))
+                      }
                       className="w-full mt-3 accent-blue-600"
                     />
                   </div>
