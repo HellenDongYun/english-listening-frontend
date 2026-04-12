@@ -1,11 +1,13 @@
 "use client";
 
+import { X } from "lucide-react";
 import type { Subtitle } from "@/types/subtitle";
 
 type Props = {
   bookmarks: Subtitle[];
   seekTo: (startMs: number) => void;
   onClear: () => void;
+  onRemove: (startMs: number) => void;
 };
 
 function formatTime(ms: number) {
@@ -20,9 +22,10 @@ export default function MarkedSentencesPanel({
   bookmarks,
   seekTo,
   onClear,
+  onRemove,
 }: Props) {
   return (
-    <div className="sticky top-6 h-fit w-full rounded-xl border  border-slate-200 bg-white p-6">
+    <div className="sticky top-6 h-fit w-full rounded-xl border border-slate-200 bg-white p-6">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-medium text-slate-800">Marked Sentences</h3>
 
@@ -49,12 +52,27 @@ export default function MarkedSentencesPanel({
               onClick={() => seekTo(b.startMs)}
               className="cursor-pointer rounded-lg bg-slate-100 p-3 transition hover:bg-slate-200"
             >
-              <div className="flex gap-3">
-                <span className="w-12 shrink-0 text-xs text-slate-500">
-                  {formatTime(b.startMs)}
-                </span>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 gap-3">
+                  <span className="w-12 shrink-0 text-xs text-slate-500">
+                    {formatTime(b.startMs)}
+                  </span>
 
-                <span className="break-words text-slate-700">{b.text}</span>
+                  <span className="break-words text-slate-700">{b.text}</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(b.startMs);
+                  }}
+                  className="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-slate-300 hover:text-red-500"
+                  aria-label="Remove bookmarked sentence"
+                  title="Remove"
+                >
+                  <X size={16} />
+                </button>
               </div>
             </li>
           ))}

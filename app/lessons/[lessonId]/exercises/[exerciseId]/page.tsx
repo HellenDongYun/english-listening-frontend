@@ -84,6 +84,10 @@ export default function ExercisePage() {
   const clearBookmarks = () => {
     setBookmarks([]);
   };
+  //bookmarks 单独删除函数
+  const removeBookmark = (startMs: number) => {
+    setBookmarks((prev) => prev.filter((b) => b.startMs !== startMs));
+  };
   /* ========= Fetch Exercise ========= */
   useEffect(() => {
     fetch(
@@ -459,6 +463,7 @@ export default function ExercisePage() {
               bookmarks={bookmarks}
               seekTo={seekTo}
               onClear={clearBookmarks}
+              onRemove={removeBookmark}
             />
           </div>
         </div>
