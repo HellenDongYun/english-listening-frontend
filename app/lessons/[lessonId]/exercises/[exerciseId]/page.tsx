@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import WaveSurfer from "wavesurfer.js";
 import {
   Play,
@@ -11,8 +11,11 @@ import {
   Bookmark,
   Sun,
   Moon,
+  Volume2,
+  ArrowLeft,
 } from "lucide-react";
 import PlaybackRateSelector from "../../../../../components/PlaybackRateSelector";
+import SubtitlesPanel from "../../../../../components/SubtitlesPanel";
 /* ========= Types ========= */
 
 type Exercise = {
@@ -29,6 +32,7 @@ type Subtitle = {
 };
 
 export default function ExercisePage() {
+  const router = useRouter();
   const { lessonId, exerciseId } = useParams<{
     lessonId: string;
     exerciseId: string;
@@ -40,17 +44,36 @@ export default function ExercisePage() {
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
-  const [dark, setDark] = useState(false);
+  //const [dark, setDark] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
+  const [durationMs, setDurationMs] = useState(0);
   const [bookmarks, setBookmarks] = useState<Subtitle[]>([]);
   const [rate, setRate] = useState(1);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  //   const [rateOpen, setRateOpen] = useState(false);
+  const [volume, setVolume] = useState(0.75);
+  const [volumeOpen, setVolumeOpen] = useState(false);
+
+  const volumeMenuRef = useRef<HTMLDivElement>(null);
+  const volumeButtonRef = useRef<HTMLButtonElement>(null);
+  const [volumePosition, setVolumePosition] = useState({ top: 0, left: 0 });
+
+  const openVolumeMenu = () => {
+    if (!volumeButtonRef.current) return;
+
+    const rect = volumeButtonRef.current.getBoundingClientRect();
+    const panelWidth = 96; // 和下面 width 保持一致
+
+    setVolumePosition({
+      left: rect.left + rect.width / 2 - panelWidth / 2, // 水平居中到按钮正上方
+      top: rect.top - 8, // 往上留一点间距
+    });
+
+    setVolumeOpen(true);
+  };
   /* ========= Fetch Exercise ========= */
   useEffect(() => {
     fetch(
-      `http://localhost:5142/api/lessons/${lessonId}/exercises/${exerciseId}`
+      `http://localhost:5142/api/lessons/${lessonId}/exercises/${exerciseId}`,
     )
       .then((res) => res.json())
       .then((data: Exercise) => {
@@ -59,6 +82,25 @@ export default function ExercisePage() {
       })
       .catch(console.error);
   }, [lessonId, exerciseId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      const clickedButton =
+        volumeButtonRef.current && volumeButtonRef.current.contains(target);
+
+      const clickedMenu =
+        volumeMenuRef.current && volumeMenuRef.current.contains(target);
+
+      if (!clickedButton && !clickedMenu) {
+        setVolumeOpen(false);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
 
   /* ========= Mock Subtitles ========= */
   const subtitles: Subtitle[] = [
@@ -107,6 +149,12 @@ export default function ExercisePage() {
 
     ws.load(audioUrl);
 
+    ws.on("ready", () => {
+      if (!cancelled) {
+        setDurationMs(ws.getDuration() * 1000);
+      }
+    });
+
     ws.on("timeupdate", (sec) => {
       if (!cancelled) setCurrentMs(sec * 1000);
     });
@@ -130,13 +178,38 @@ export default function ExercisePage() {
   }, [audioUrl]);
 
   const handleRateChange = (newRate: number) => {
-    // 更新本地 UI 状态（控制按钮显示的数字）
     setRate(newRate);
 
-    // 更新播放器实例的倍速（这步是让音频变快的关键）
     if (wsRef.current) {
       wsRef.current.setPlaybackRate(newRate);
     }
+  };
+
+  const formatTime = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  const handleVolumeChange = (value: number) => {
+    setVolume(value);
+    if (wsRef.current) {
+      wsRef.current.setVolume(value);
+    }
+  };
+
+  useEffect(() => {
+    if (wsRef.current) {
+      wsRef.current.setVolume(volume);
+    }
+  }, [volume]);
+
+  const handleSeek = (value: number) => {
+    if (!wsRef.current || durationMs === 0) return;
+    const clamped = Math.max(0, Math.min(value, durationMs));
+    wsRef.current.seekTo(clamped / durationMs);
+    setCurrentMs(clamped);
   };
 
   /* ========= Controls ========= */
@@ -154,16 +227,24 @@ export default function ExercisePage() {
     setIsPlaying(true);
   };
 
+  const stepBack = () => {
+    seekTo(Math.max(0, currentMs - 5000));
+  };
+
+  const stepForward = () => {
+    seekTo(Math.min(durationMs || 0, currentMs + 5000));
+  };
+
   const toggleBookmark = (s: Subtitle) => {
     setBookmarks((prev) =>
       prev.find((b) => b.startMs === s.startMs)
         ? prev.filter((b) => b.startMs !== s.startMs)
-        : [...prev, s]
+        : [...prev, s],
     );
   };
 
   const activeIndex = subtitles.findIndex(
-    (s) => currentMs >= s.startMs && currentMs < s.endMs
+    (s) => currentMs >= s.startMs && currentMs < s.endMs,
   );
 
   if (!exercise) {
@@ -171,88 +252,180 @@ export default function ExercisePage() {
   }
 
   return (
-    <div className={dark ? "dark" : ""}>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+    //<div className={dark ? "dark" : ""}>
+    <div>
+      <div className="min-h-screen bg-gray-50 transition-colors">
         <div className="max-w-3xl mx-auto p-6 space-y-8 text-gray-900 dark:text-gray-100">
           {/* Header */}
-          <div className="flex justify-between items-center">
-            <button className="text-sm text-gray-500">← Back</button>
+          <div className="flex items-center justify-between gap-4">
             <button
-              onClick={() => setDark(!dark)}
-              className="p-2 rounded-full border dark:border-gray-700"
+              type="button"
+              onClick={() => router.back()}
+              className="flex items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 active:scale-95"
             >
-              {dark ? <Sun size={18} /> : <Moon size={18} />}
+              <ArrowLeft size={16} className="shrink-0" />
+              <span>Back</span>
             </button>
           </div>
-
           {/* Title */}
           <div>
-            <h1 className="text-2xl font-semibold">{exercise.title}</h1>
+            <h1 className="text-2xl font-semibold text-black">
+              {exercise.title}
+            </h1>
             <p className="text-sm text-gray-500">
               Practice listening with interactive subtitles
             </p>
           </div>
 
           {/* Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             {/* LEFT */}
             <div className="lg:col-span-2 space-y-6">
               {/* Player */}
-              <div className="bg-white dark:bg-gray-800 border rounded-xl p-6">
-                <div ref={waveformRef} />
-                <div className="mt-4 flex justify-between items-center">
-                  <div className="flex items-center gap-4">
-                    <SkipBack size={18} />
-                    <button
-                      onClick={togglePlay}
-                      className="p-3 rounded-full bg-black text-white dark:bg-white dark:text-black"
-                    >
-                      {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-                    </button>
-                    <SkipForward size={18} />
-                  </div>
-                  <div className="relative">
-                    <PlaybackRateSelector
-                      playbackRate={rate}
-                      setPlaybackRate={handleRateChange}
+              <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-2xl shadow-slate-200/30">
+                <div className="overflow-hidden rounded-[24px] bg-slate-100 p-4">
+                  <div
+                    ref={waveformRef}
+                    className="h-20 w-full rounded-[20px] bg-slate-100 "
+                  />
+                </div>
+
+                <div className="mt-5 overflow-visible rounded-[24px] bg-slate-50 p-2 shadow-sm shadow-slate-200/40 dark:shadow-none">
+                  <div className="mb-4">
+                    <div className="mb-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                      <span>{formatTime(currentMs)}</span>
+                      <span>{formatTime(durationMs)}</span>
+                    </div>
+                    {/* <div className="h-1.5 rounded-full bg-slate-200  overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-sky-500 to-blue-600 transition-all"
+                        style={{
+                          width: `${durationMs ? (currentMs / durationMs) * 100 : 0}%`,
+                        }}
+                      />
+                    </div> */}
+                    <input
+                      type="range"
+                      min={0}
+                      max={durationMs}
+                      value={Math.min(currentMs, durationMs)}
+                      onChange={(e) => handleSeek(Number(e.target.value))}
+                      className="w-full mt-3 accent-blue-600"
                     />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="relative flex items-center gap-3 overflow-visible">
+                      <button
+                        onClick={stepBack}
+                        type="button"
+                        className="flex h-14 w-14 items-center bg-white justify-center rounded-full shadow-sm transition-transform hover:scale-[1.03] hover:bg-slate-100  dark:text-slate-600"
+                        aria-label="Rewind 5 seconds"
+                      >
+                        <SkipBack size={22} />
+                      </button>
+
+                      <button
+                        onClick={togglePlay}
+                        type="button"
+                        className="flex h-16 w-16 items-center justify-center rounded-full text-white shadow-xl transition-transform duration-200 hover:scale-[1.03] dark:bg-slate-100 dark:text-slate-950"
+                        aria-label={isPlaying ? "Pause" : "Play"}
+                      >
+                        {isPlaying ? <Pause size={26} /> : <Play size={26} />}
+                      </button>
+
+                      <button
+                        onClick={stepForward}
+                        type="button"
+                        className="flex h-14 w-14 items-center bg-white justify-center rounded-full shadow-sm transition-transform hover:scale-[1.03] hover:bg-slate-100  dark:text-slate-600"
+                        aria-label="Forward 5 seconds"
+                      >
+                        <SkipForward size={22} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <>
+                          <button
+                            ref={volumeButtonRef}
+                            onClick={() =>
+                              volumeOpen
+                                ? setVolumeOpen(false)
+                                : openVolumeMenu()
+                            }
+                            type="button"
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 "
+                            aria-label="Volume"
+                          >
+                            <Volume2 size={18} />
+                          </button>
+
+                          {volumeOpen && (
+                            <div
+                              ref={volumeMenuRef}
+                              style={{
+                                position: "fixed",
+                                left: volumePosition.left,
+                                top: volumePosition.top,
+                                transform: "translateY(-100%)",
+                                zIndex: 9999,
+                                width: "96px",
+                              }}
+                              className="rounded-xl bg-white px-2 py-2 shadow-sm"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="relative w-full">
+                                {/* 百分比 */}
+                                <div
+                                  className="pointer-events-none absolute -top-5 text-xs text-slate-600"
+                                  style={{
+                                    left: `${volume * 100}%`,
+                                    transform: "translateX(-50%)",
+                                  }}
+                                >
+                                  {Math.round(volume * 100)}%
+                                </div>
+
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={1}
+                                  step={0.01}
+                                  value={volume}
+                                  onChange={(e) =>
+                                    handleVolumeChange(Number(e.target.value))
+                                  }
+                                  className="volume-slider w-full block"
+                                  style={
+                                    {
+                                      "--progress": `${volume * 100}%`,
+                                    } as React.CSSProperties
+                                  }
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      </div>
+
+                      <PlaybackRateSelector
+                        playbackRate={rate}
+                        setPlaybackRate={handleRateChange}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Subtitles */}
-              <div className="bg-white dark:bg-gray-800 border rounded-xl p-6 space-y-3">
-                <h3 className="font-medium mb-2">Subtitles</h3>
-                {subtitles.map((s, i) => {
-                  const active = i === activeIndex;
-                  return (
-                    <div
-                      key={i}
-                      onClick={() => seekTo(s.startMs)}
-                      className={`flex justify-between p-4 rounded-lg border cursor-pointer
-                        ${
-                          active
-                            ? "bg-gray-900 text-white dark:bg-white dark:text-black"
-                            : "bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600"
-                        }`}
-                    >
-                      <p className="text-sm">{s.text}</p>
-                      <Bookmark
-                        size={16}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleBookmark(s);
-                        }}
-                        className={
-                          bookmarks.find((b) => b.startMs === s.startMs)
-                            ? "fill-current"
-                            : ""
-                        }
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+              <SubtitlesPanel
+                subtitles={subtitles}
+                activeIndex={activeIndex}
+                seekTo={seekTo}
+                bookmarks={bookmarks}
+                toggleBookmark={toggleBookmark}
+              />
             </div>
 
             {/* RIGHT */}
