@@ -50,7 +50,7 @@ export default function SubtitlesPanel({
   }, [activeIndex, filteredSubtitles]);
 
   return (
-    <div className="rounded-xl border bg-white p-6">
+    <div className="rounded-xl border border-slate-200 bg-white p-6">
       {/* header */}
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-medium text-slate-800">Subtitles</h3>

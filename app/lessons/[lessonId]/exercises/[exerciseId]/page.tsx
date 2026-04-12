@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import PlaybackRateSelector from "../../../../../components/PlaybackRateSelector";
 import SubtitlesPanel from "../../../../../components/SubtitlesPanel";
+import MarkedSentencesPanel from "@/components/MarkedSentencesPanel";
 /* ========= Types ========= */
 
 type Exercise = {
@@ -48,7 +49,11 @@ export default function ExercisePage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
-  const [bookmarks, setBookmarks] = useState<Subtitle[]>([]);
+  const [bookmarks, setBookmarks] = useState<Subtitle[]>(() => {
+    if (typeof window === "undefined") return [];
+    const saved = localStorage.getItem("bookmarks");
+    return saved ? JSON.parse(saved) : [];
+  });
   const [rate, setRate] = useState(1);
   const [volume, setVolume] = useState(0.75);
   const [volumeOpen, setVolumeOpen] = useState(false);
@@ -69,6 +74,15 @@ export default function ExercisePage() {
     });
 
     setVolumeOpen(true);
+  };
+  // bookmarks 存 localStorage
+  useEffect(() => {
+    localStorage.setItem("bookmarks", JSON.stringify(bookmarks));
+  }, [bookmarks]);
+
+  // bookmarks 清空函数
+  const clearBookmarks = () => {
+    setBookmarks([]);
   };
   /* ========= Fetch Exercise ========= */
   useEffect(() => {
@@ -265,7 +279,7 @@ export default function ExercisePage() {
     //<div className={dark ? "dark" : ""}>
     <div>
       <div className="min-h-screen bg-gray-50 transition-colors">
-        <div className="max-w-3xl mx-auto p-6 space-y-8 text-gray-900 dark:text-gray-100">
+        <div className="mx-auto max-w-6xl space-y-8 p-6 text-gray-900">
           {/* Header */}
           <div className="flex items-center justify-between gap-4">
             <button
@@ -288,9 +302,9 @@ export default function ExercisePage() {
           </div>
 
           {/* Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(360px,1fr)]">
             {/* LEFT */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="in-w-0 space-y-6">
               {/* Player */}
               <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-2xl shadow-slate-200/30">
                 <div className="overflow-hidden rounded-[24px] bg-slate-100 p-4">
@@ -440,27 +454,12 @@ export default function ExercisePage() {
               />
             </div>
 
-            {/* RIGHT */}
-            <div className="bg-white dark:bg-gray-800 border rounded-xl p-6 h-fit">
-              <h3 className="font-medium mb-3">Marked Sentences</h3>
-              {bookmarks.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  Click the bookmark icon to save important sentences
-                </p>
-              ) : (
-                <ul className="space-y-2 text-sm">
-                  {bookmarks.map((b, i) => (
-                    <li
-                      key={i}
-                      onClick={() => seekTo(b.startMs)}
-                      className="p-2 rounded bg-gray-100 dark:bg-gray-700 cursor-pointer"
-                    >
-                      {b.text}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            {/* RIGHT marked sentences */}
+            <MarkedSentencesPanel
+              bookmarks={bookmarks}
+              seekTo={seekTo}
+              onClear={clearBookmarks}
+            />
           </div>
         </div>
       </div>
