@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import WaveSurfer from "wavesurfer.js";
 import {
@@ -8,29 +8,14 @@ import {
   Pause,
   SkipBack,
   SkipForward,
-  Bookmark,
-  Sun,
-  Moon,
   Volume2,
   ArrowLeft,
 } from "lucide-react";
 import PlaybackRateSelector from "../../../../../components/PlaybackRateSelector";
 import SubtitlesPanel from "../../../../../components/SubtitlesPanel";
 import MarkedSentencesPanel from "@/components/MarkedSentencesPanel";
-/* ========= Types ========= */
-
-type Exercise = {
-  id: string;
-  title: string;
-  audioUrl: string;
-  transcript: string;
-};
-
-type Subtitle = {
-  startMs: number;
-  endMs: number;
-  text: string;
-};
+import type { ExerciseDetailDto } from "@/types/exercise";
+import type { Subtitle } from "@/types/subtitle";
 
 export default function ExercisePage() {
   const router = useRouter();
@@ -42,18 +27,19 @@ export default function ExercisePage() {
   const waveformRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
 
-  const [exercise, setExercise] = useState<Exercise | null>(null);
+  const [exercise, setExercise] = useState<ExerciseDetailDto | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
-  //const [dark, setDark] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
+
   const [bookmarks, setBookmarks] = useState<Subtitle[]>(() => {
     if (typeof window === "undefined") return [];
     const saved = localStorage.getItem("bookmarks");
     return saved ? JSON.parse(saved) : [];
   });
+
   const [rate, setRate] = useState(1);
   const [volume, setVolume] = useState(0.75);
   const [volumeOpen, setVolumeOpen] = useState(false);
@@ -66,35 +52,34 @@ export default function ExercisePage() {
     if (!volumeButtonRef.current) return;
 
     const rect = volumeButtonRef.current.getBoundingClientRect();
-    const panelWidth = 96; // 和下面 width 保持一致
+    const panelWidth = 96;
 
     setVolumePosition({
-      left: rect.left + rect.width / 2 - panelWidth / 2, // 水平居中到按钮正上方
-      top: rect.top - 8, // 往上留一点间距
+      left: rect.left + rect.width / 2 - panelWidth / 2,
+      top: rect.top - 8,
     });
 
     setVolumeOpen(true);
   };
-  // bookmarks 存 localStorage
+
   useEffect(() => {
     localStorage.setItem("bookmarks", JSON.stringify(bookmarks));
   }, [bookmarks]);
 
-  // bookmarks 清空函数
   const clearBookmarks = () => {
     setBookmarks([]);
   };
-  //bookmarks 单独删除函数
+
   const removeBookmark = (startMs: number) => {
     setBookmarks((prev) => prev.filter((b) => b.startMs !== startMs));
   };
-  /* ========= Fetch Exercise ========= */
+
   useEffect(() => {
     fetch(
       `http://localhost:5142/api/lessons/${lessonId}/exercises/${exerciseId}`,
     )
       .then((res) => res.json())
-      .then((data: Exercise) => {
+      .then((data: ExerciseDetailDto) => {
         setExercise(data);
         setAudioUrl(`http://localhost:5142${data.audioUrl}`);
       })
@@ -120,28 +105,17 @@ export default function ExercisePage() {
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
-  /* ========= Mock Subtitles ========= */
-  const subtitles: Subtitle[] = [
-    {
-      startMs: 0,
-      endMs: 3000,
-      text: "Customer: Hi, I'd like to order a coffee.",
-    },
-    {
-      startMs: 3000,
-      endMs: 6000,
-      text: "Barista: Sure! What size would you like?",
-    },
-    {
-      startMs: 6000,
-      endMs: 10000,
-      text: "Customer: Medium cappuccino, extra shot.",
-    },
-    { startMs: 10000, endMs: 14000, text: "Barista: Hot or iced?" },
-    { startMs: 14000, endMs: 18000, text: "Customer: Hot, please." },
-  ];
+  // 用后端返回的 subtitles 转成前端需要的 Subtitle[]
+  const subtitles: Subtitle[] = useMemo(() => {
+    if (!exercise) return [];
 
-  /* ========= Init WaveSurfer (SAFE) ========= */
+    return (exercise.subtitles || []).map((item) => ({
+      startMs: Math.round(item.startSeconds * 1000),
+      endMs: Math.round(item.endSeconds * 1000),
+      text: item.text,
+    }));
+  }, [exercise]);
+
   useEffect(() => {
     if (!audioUrl || !waveformRef.current) return;
 
@@ -174,7 +148,9 @@ export default function ExercisePage() {
     });
 
     ws.on("timeupdate", (sec) => {
-      if (!cancelled) setCurrentMs(sec * 1000);
+      if (!cancelled) {
+        setCurrentMs(sec * 1000);
+      }
     });
 
     ws.on("finish", () => {
@@ -209,7 +185,7 @@ export default function ExercisePage() {
     const seconds = totalSeconds % 60;
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
-  //拖动音频同步更新subtiles
+
   const syncCurrentPosition = (ms: number) => {
     const clamped = Math.max(0, Math.min(ms, durationMs || 0));
     setCurrentMs(clamped);
@@ -236,7 +212,6 @@ export default function ExercisePage() {
     syncCurrentPosition(clamped);
   };
 
-  /* ========= Controls ========= */
   const togglePlay = () => {
     if (!wsRef.current) return;
     wsRef.current.playPause();
@@ -247,6 +222,8 @@ export default function ExercisePage() {
     if (!wsRef.current) return;
 
     const duration = wsRef.current.getDuration() * 1000;
+    if (duration <= 0) return;
+
     const clamped = Math.max(0, Math.min(ms, duration));
 
     wsRef.current.seekTo(clamped / duration);
@@ -271,6 +248,7 @@ export default function ExercisePage() {
     );
   };
 
+  // 当前播放到哪一句字幕
   const activeIndex = subtitles.findIndex(
     (s) => currentMs >= s.startMs && currentMs < s.endMs,
   );
@@ -280,11 +258,9 @@ export default function ExercisePage() {
   }
 
   return (
-    //<div className={dark ? "dark" : ""}>
     <div>
       <div className="min-h-screen bg-gray-50 transition-colors">
         <div className="mx-auto max-w-6xl space-y-8 p-6 text-gray-900">
-          {/* Header */}
           <div className="flex items-center justify-between gap-4">
             <button
               type="button"
@@ -295,7 +271,7 @@ export default function ExercisePage() {
               <span>Back</span>
             </button>
           </div>
-          {/* Title */}
+
           <div>
             <h1 className="text-2xl font-semibold text-black">
               {exercise.title}
@@ -305,11 +281,8 @@ export default function ExercisePage() {
             </p>
           </div>
 
-          {/* Layout */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(360px,1fr)]">
-            {/* LEFT */}
             <div className="in-w-0 space-y-6">
-              {/* Player */}
               <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-2xl shadow-slate-200/30">
                 <div className="overflow-hidden rounded-[24px] bg-slate-100 p-4">
                   <div
@@ -324,14 +297,6 @@ export default function ExercisePage() {
                       <span>{formatTime(currentMs)}</span>
                       <span>{formatTime(durationMs)}</span>
                     </div>
-                    {/* <div className="h-1.5 rounded-full bg-slate-200  overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-sky-500 to-blue-600 transition-all"
-                        style={{
-                          width: `${durationMs ? (currentMs / durationMs) * 100 : 0}%`,
-                        }}
-                      />
-                    </div> */}
                     <input
                       type="range"
                       min={0}
@@ -349,7 +314,7 @@ export default function ExercisePage() {
                       <button
                         onClick={stepBack}
                         type="button"
-                        className="flex h-14 w-14 items-center bg-white justify-center rounded-full shadow-sm transition-transform hover:scale-[1.03] hover:bg-slate-100  dark:text-slate-600"
+                        className="flex h-14 w-14 items-center bg-white justify-center rounded-full shadow-sm transition-transform hover:scale-[1.03] hover:bg-slate-100 dark:text-slate-600"
                         aria-label="Rewind 5 seconds"
                       >
                         <SkipBack size={22} />
@@ -367,7 +332,7 @@ export default function ExercisePage() {
                       <button
                         onClick={stepForward}
                         type="button"
-                        className="flex h-14 w-14 items-center bg-white justify-center rounded-full shadow-sm transition-transform hover:scale-[1.03] hover:bg-slate-100  dark:text-slate-600"
+                        className="flex h-14 w-14 items-center bg-white justify-center rounded-full shadow-sm transition-transform hover:scale-[1.03] hover:bg-slate-100 dark:text-slate-600"
                         aria-label="Forward 5 seconds"
                       >
                         <SkipForward size={22} />
@@ -376,67 +341,62 @@ export default function ExercisePage() {
 
                     <div className="flex items-center gap-3">
                       <div className="relative">
-                        <>
-                          <button
-                            ref={volumeButtonRef}
-                            onClick={() =>
-                              volumeOpen
-                                ? setVolumeOpen(false)
-                                : openVolumeMenu()
-                            }
-                            type="button"
-                            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 "
-                            aria-label="Volume"
+                        <button
+                          ref={volumeButtonRef}
+                          onClick={() =>
+                            volumeOpen ? setVolumeOpen(false) : openVolumeMenu()
+                          }
+                          type="button"
+                          className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+                          aria-label="Volume"
+                        >
+                          <Volume2 size={18} />
+                        </button>
+
+                        {volumeOpen && (
+                          <div
+                            ref={volumeMenuRef}
+                            style={{
+                              position: "fixed",
+                              left: volumePosition.left,
+                              top: volumePosition.top,
+                              transform: "translateY(-100%)",
+                              zIndex: 9999,
+                              width: "96px",
+                            }}
+                            className="rounded-xl bg-white px-2 py-2 shadow-sm"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <Volume2 size={18} />
-                          </button>
-
-                          {volumeOpen && (
-                            <div
-                              ref={volumeMenuRef}
-                              style={{
-                                position: "fixed",
-                                left: volumePosition.left,
-                                top: volumePosition.top,
-                                transform: "translateY(-100%)",
-                                zIndex: 9999,
-                                width: "96px",
-                              }}
-                              className="rounded-xl bg-white px-2 py-2 shadow-sm"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <div className="relative w-full">
-                                {/* 百分比 */}
-                                <div
-                                  className="pointer-events-none absolute -top-5 text-xs text-slate-600"
-                                  style={{
-                                    left: `${volume * 100}%`,
-                                    transform: "translateX(-50%)",
-                                  }}
-                                >
-                                  {Math.round(volume * 100)}%
-                                </div>
-
-                                <input
-                                  type="range"
-                                  min={0}
-                                  max={1}
-                                  step={0.01}
-                                  value={volume}
-                                  onChange={(e) =>
-                                    handleVolumeChange(Number(e.target.value))
-                                  }
-                                  className="volume-slider w-full block"
-                                  style={
-                                    {
-                                      "--progress": `${volume * 100}%`,
-                                    } as React.CSSProperties
-                                  }
-                                />
+                            <div className="relative w-full">
+                              <div
+                                className="pointer-events-none absolute -top-5 text-xs text-slate-600"
+                                style={{
+                                  left: `${volume * 100}%`,
+                                  transform: "translateX(-50%)",
+                                }}
+                              >
+                                {Math.round(volume * 100)}%
                               </div>
+
+                              <input
+                                type="range"
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                value={volume}
+                                onChange={(e) =>
+                                  handleVolumeChange(Number(e.target.value))
+                                }
+                                className="volume-slider w-full block"
+                                style={
+                                  {
+                                    "--progress": `${volume * 100}%`,
+                                  } as React.CSSProperties
+                                }
+                              />
                             </div>
-                          )}
-                        </>
+                          </div>
+                        )}
                       </div>
 
                       <PlaybackRateSelector
@@ -448,7 +408,6 @@ export default function ExercisePage() {
                 </div>
               </div>
 
-              {/* Subtitles */}
               <SubtitlesPanel
                 subtitles={subtitles}
                 activeIndex={activeIndex}
@@ -458,7 +417,6 @@ export default function ExercisePage() {
               />
             </div>
 
-            {/* RIGHT marked sentences */}
             <MarkedSentencesPanel
               bookmarks={bookmarks}
               seekTo={seekTo}

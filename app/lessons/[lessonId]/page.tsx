@@ -42,7 +42,7 @@ export default function LessonDetailPage() {
       try {
         const res = await fetch(
           `http://localhost:5142/api/lessons/${lessonId}`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
 
         if (!res.ok) {
@@ -125,30 +125,31 @@ export default function LessonDetailPage() {
                   {index + 1}. {ex.title}
                 </div>
 
-                <div className="text-sm text-gray-500">{ex.transcript}</div>
-
                 <div className="flex items-center gap-3 text-xs text-gray-500">
                   <span className="px-2 py-1 bg-gray-100 rounded-full">
                     {difficultyToText(ex.difficulty)}
                   </span>
-                  <span>{secondsToDuration(ex.durationSeconds)}</span>
+                  <span
+                    className={`px-2 py-1 rounded-full ${
+                      ex.isCompleted
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {ex.isCompleted ? "Completed" : "Not Started"}
+                  </span>
                 </div>
               </div>
-
               <div className="flex flex-col items-end gap-2">
-                {audioSrc && <audio controls src={audioSrc} className="w-40" />}
-
                 <button
                   onClick={() =>
                     router.push(`/lessons/${lesson.id}/exercises/${ex.id}`)
                   }
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                  className={`px-4 py-2 rounded-lg text-sm text-white ${
+                    ex.isCompleted ? "bg-green-600" : "bg-blue-600"
+                  }`}
                 >
-                  {ex.isCompleted
-                    ? "Completed"
-                    : ex.progress
-                    ? "Continue"
-                    : "Start"}
+                  {ex.isCompleted ? "Completed" : "Start"}
                 </button>
               </div>
             </div>
