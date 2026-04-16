@@ -26,6 +26,7 @@ export default function ExercisePage() {
 
   const waveformRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
+  const currentMsRef = useRef(0);
 
   const [exercise, setExercise] = useState<ExerciseDetailDto | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -65,6 +66,10 @@ export default function ExercisePage() {
   useEffect(() => {
     localStorage.setItem("bookmarks", JSON.stringify(bookmarks));
   }, [bookmarks]);
+
+  useEffect(() => {
+    currentMsRef.current = currentMs;
+  }, [currentMs]);
 
   const clearBookmarks = () => {
     setBookmarks([]);
@@ -117,9 +122,12 @@ export default function ExercisePage() {
 
   const saveExerciseProgress = (ms: number) => {
     try {
+      const safeMs = Math.max(0, Math.floor(ms));
       const saved = localStorage.getItem("exerciseProgress");
       const parsed: Record<string, number> = saved ? JSON.parse(saved) : {};
-      parsed[exerciseId] = ms;
+
+      parsed[String(exerciseId)] = safeMs;
+
       localStorage.setItem("exerciseProgress", JSON.stringify(parsed));
     } catch (error) {
       console.error("Failed to save progress", error);
@@ -156,19 +164,24 @@ export default function ExercisePage() {
       const totalDurationMs = ws.getDuration() * 1000;
       setDurationMs(totalDurationMs);
 
-      // 进入页面后恢复上次进度
       try {
         const savedProgress = localStorage.getItem("exerciseProgress");
         const parsed: Record<string, number> = savedProgress
           ? JSON.parse(savedProgress)
           : {};
 
-        const savedMs = parsed[exerciseId] ?? 0;
+        const savedMs = parsed[String(exerciseId)] ?? 0;
 
         if (savedMs > 0 && totalDurationMs > 0) {
-          const safeMs = Math.min(savedMs, totalDurationMs - 500);
-          ws.seekTo(safeMs / totalDurationMs);
-          setCurrentMs(safeMs);
+          const safeMs = Math.min(savedMs, Math.max(totalDurationMs - 300, 0));
+
+          requestAnimationFrame(() => {
+            if (!cancelled && wsRef.current) {
+              ws.seekTo(safeMs / totalDurationMs);
+              setCurrentMs(safeMs);
+              currentMsRef.current = safeMs;
+            }
+          });
         }
       } catch (error) {
         console.error("Failed to restore progress", error);
@@ -177,7 +190,9 @@ export default function ExercisePage() {
 
     ws.on("timeupdate", (sec) => {
       if (!cancelled) {
-        setCurrentMs(sec * 1000);
+        const ms = sec * 1000;
+        setCurrentMs(ms);
+        currentMsRef.current = ms;
       }
     });
 
@@ -186,27 +201,25 @@ export default function ExercisePage() {
 
       setIsPlaying(false);
 
-      // 标记已完成
       try {
         const savedCompleted = localStorage.getItem("completedExercises");
         const completedList: string[] = savedCompleted
           ? JSON.parse(savedCompleted)
           : [];
 
-        if (!completedList.includes(exerciseId)) {
+        if (!completedList.includes(String(exerciseId))) {
           localStorage.setItem(
             "completedExercises",
-            JSON.stringify([...completedList, exerciseId]),
+            JSON.stringify([...completedList, String(exerciseId)]),
           );
         }
 
-        // 完成后清除进度
         const savedProgress = localStorage.getItem("exerciseProgress");
         const progressMap: Record<string, number> = savedProgress
           ? JSON.parse(savedProgress)
           : {};
 
-        delete progressMap[exerciseId];
+        delete progressMap[String(exerciseId)];
         localStorage.setItem("exerciseProgress", JSON.stringify(progressMap));
       } catch (error) {
         console.error("Failed to mark exercise complete", error);
@@ -220,7 +233,6 @@ export default function ExercisePage() {
     return () => {
       cancelled = true;
 
-      // 离开页面前保存最新进度
       if (wsRef.current) {
         const latestMs = wsRef.current.getCurrentTime() * 1000;
         saveExerciseProgress(latestMs);
@@ -231,19 +243,6 @@ export default function ExercisePage() {
       }
     };
   }, [audioUrl, exerciseId]);
-
-  useEffect(() => {
-    return () => {
-      try {
-        const saved = localStorage.getItem("exerciseProgress");
-        const parsed: Record<string, number> = saved ? JSON.parse(saved) : {};
-        parsed[exerciseId] = currentMs;
-        localStorage.setItem("exerciseProgress", JSON.stringify(parsed));
-      } catch (error) {
-        console.error("Failed to save progress", error);
-      }
-    };
-  }, [exerciseId, currentMs]);
 
   const handleRateChange = (newRate: number) => {
     setRate(newRate);
@@ -257,11 +256,6 @@ export default function ExercisePage() {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-  };
-
-  const syncCurrentPosition = (ms: number) => {
-    const clamped = Math.max(0, Math.min(ms, durationMs || 0));
-    setCurrentMs(clamped);
   };
 
   const handleVolumeChange = (value: number) => {
@@ -283,6 +277,7 @@ export default function ExercisePage() {
     const clamped = Math.max(0, Math.min(value, durationMs));
     wsRef.current.seekTo(clamped / durationMs);
     setCurrentMs(clamped);
+    currentMsRef.current = clamped;
     saveExerciseProgress(clamped);
   };
 
@@ -293,11 +288,11 @@ export default function ExercisePage() {
     wsRef.current.playPause();
     setIsPlaying((p) => !p);
 
-    // 如果此刻是从播放 -> 暂停，就保存当前位置
     if (wasPlaying) {
       const latestMs = wsRef.current.getCurrentTime() * 1000;
       saveExerciseProgress(latestMs);
       setCurrentMs(latestMs);
+      currentMsRef.current = latestMs;
     }
   };
 
@@ -311,6 +306,7 @@ export default function ExercisePage() {
 
     wsRef.current.seekTo(clamped / duration);
     setCurrentMs(clamped);
+    currentMsRef.current = clamped;
     saveExerciseProgress(clamped);
     wsRef.current.play();
     setIsPlaying(true);
