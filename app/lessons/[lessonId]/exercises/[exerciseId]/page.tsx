@@ -105,7 +105,6 @@ export default function ExercisePage() {
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
-  // 用后端返回的 subtitles 转成前端需要的 Subtitle[]
   const subtitles: Subtitle[] = useMemo(() => {
     if (!exercise) return [];
 
@@ -115,6 +114,17 @@ export default function ExercisePage() {
       text: item.text,
     }));
   }, [exercise]);
+
+  const saveExerciseProgress = (ms: number) => {
+    try {
+      const saved = localStorage.getItem("exerciseProgress");
+      const parsed: Record<string, number> = saved ? JSON.parse(saved) : {};
+      parsed[exerciseId] = ms;
+      localStorage.setItem("exerciseProgress", JSON.stringify(parsed));
+    } catch (error) {
+      console.error("Failed to save progress", error);
+    }
+  };
 
   useEffect(() => {
     if (!audioUrl || !waveformRef.current) return;
@@ -138,12 +148,30 @@ export default function ExercisePage() {
     });
 
     wsRef.current = ws;
-
     ws.load(audioUrl);
 
     ws.on("ready", () => {
-      if (!cancelled) {
-        setDurationMs(ws.getDuration() * 1000);
+      if (cancelled) return;
+
+      const totalDurationMs = ws.getDuration() * 1000;
+      setDurationMs(totalDurationMs);
+
+      // 进入页面后恢复上次进度
+      try {
+        const savedProgress = localStorage.getItem("exerciseProgress");
+        const parsed: Record<string, number> = savedProgress
+          ? JSON.parse(savedProgress)
+          : {};
+
+        const savedMs = parsed[exerciseId] ?? 0;
+
+        if (savedMs > 0 && totalDurationMs > 0) {
+          const safeMs = Math.min(savedMs, totalDurationMs - 500);
+          ws.seekTo(safeMs / totalDurationMs);
+          setCurrentMs(safeMs);
+        }
+      } catch (error) {
+        console.error("Failed to restore progress", error);
       }
     });
 
@@ -154,7 +182,35 @@ export default function ExercisePage() {
     });
 
     ws.on("finish", () => {
-      if (!cancelled) setIsPlaying(false);
+      if (cancelled) return;
+
+      setIsPlaying(false);
+
+      // 标记已完成
+      try {
+        const savedCompleted = localStorage.getItem("completedExercises");
+        const completedList: string[] = savedCompleted
+          ? JSON.parse(savedCompleted)
+          : [];
+
+        if (!completedList.includes(exerciseId)) {
+          localStorage.setItem(
+            "completedExercises",
+            JSON.stringify([...completedList, exerciseId]),
+          );
+        }
+
+        // 完成后清除进度
+        const savedProgress = localStorage.getItem("exerciseProgress");
+        const progressMap: Record<string, number> = savedProgress
+          ? JSON.parse(savedProgress)
+          : {};
+
+        delete progressMap[exerciseId];
+        localStorage.setItem("exerciseProgress", JSON.stringify(progressMap));
+      } catch (error) {
+        console.error("Failed to mark exercise complete", error);
+      }
     });
 
     ws.on("error", (e) => {
@@ -163,17 +219,34 @@ export default function ExercisePage() {
 
     return () => {
       cancelled = true;
+
+      // 离开页面前保存最新进度
       if (wsRef.current) {
+        const latestMs = wsRef.current.getCurrentTime() * 1000;
+        saveExerciseProgress(latestMs);
+
         wsRef.current.stop();
         wsRef.current.destroy();
         wsRef.current = null;
       }
     };
-  }, [audioUrl]);
+  }, [audioUrl, exerciseId]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        const saved = localStorage.getItem("exerciseProgress");
+        const parsed: Record<string, number> = saved ? JSON.parse(saved) : {};
+        parsed[exerciseId] = currentMs;
+        localStorage.setItem("exerciseProgress", JSON.stringify(parsed));
+      } catch (error) {
+        console.error("Failed to save progress", error);
+      }
+    };
+  }, [exerciseId, currentMs]);
 
   const handleRateChange = (newRate: number) => {
     setRate(newRate);
-
     if (wsRef.current) {
       wsRef.current.setPlaybackRate(newRate);
     }
@@ -209,13 +282,23 @@ export default function ExercisePage() {
 
     const clamped = Math.max(0, Math.min(value, durationMs));
     wsRef.current.seekTo(clamped / durationMs);
-    syncCurrentPosition(clamped);
+    setCurrentMs(clamped);
+    saveExerciseProgress(clamped);
   };
 
   const togglePlay = () => {
     if (!wsRef.current) return;
+
+    const wasPlaying = isPlaying;
     wsRef.current.playPause();
     setIsPlaying((p) => !p);
+
+    // 如果此刻是从播放 -> 暂停，就保存当前位置
+    if (wasPlaying) {
+      const latestMs = wsRef.current.getCurrentTime() * 1000;
+      saveExerciseProgress(latestMs);
+      setCurrentMs(latestMs);
+    }
   };
 
   const seekTo = (ms: number) => {
@@ -227,7 +310,8 @@ export default function ExercisePage() {
     const clamped = Math.max(0, Math.min(ms, duration));
 
     wsRef.current.seekTo(clamped / duration);
-    syncCurrentPosition(clamped);
+    setCurrentMs(clamped);
+    saveExerciseProgress(clamped);
     wsRef.current.play();
     setIsPlaying(true);
   };
@@ -248,7 +332,6 @@ export default function ExercisePage() {
     );
   };
 
-  // 当前播放到哪一句字幕
   const activeIndex = subtitles.findIndex(
     (s) => currentMs >= s.startMs && currentMs < s.endMs,
   );
@@ -265,7 +348,7 @@ export default function ExercisePage() {
             <button
               type="button"
               onClick={() => router.back()}
-              className="flex items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 active:scale-95"
+              className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
             >
               <ArrowLeft size={16} className="shrink-0" />
               <span>Back</span>
@@ -283,17 +366,17 @@ export default function ExercisePage() {
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(360px,1fr)]">
             <div className="in-w-0 space-y-6">
-              <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-2xl shadow-slate-200/30">
-                <div className="overflow-hidden rounded-[24px] bg-slate-100 p-4">
+              <div className="rounded-[32px] bg-white p-6 shadow-[0_12px_40px_rgba(15,23,42,0.08)]">
+                <div className="overflow-hidden rounded-[24px] bg-slate-50 p-4 shadow-inner">
                   <div
                     ref={waveformRef}
-                    className="h-20 w-full rounded-[20px] bg-slate-100 "
+                    className="h-20 w-full rounded-[20px] bg-slate-100"
                   />
                 </div>
 
-                <div className="mt-5 overflow-visible rounded-[24px] bg-slate-50 p-2 shadow-sm shadow-slate-200/40 dark:shadow-none">
-                  <div className="mb-4">
-                    <div className="mb-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <div className="mt-5 overflow-visible rounded-[24px] bg-slate-50/80 p-4 shadow-sm">
+                  <div className="mb-5">
+                    <div className="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
                       <span>{formatTime(currentMs)}</span>
                       <span>{formatTime(durationMs)}</span>
                     </div>
@@ -305,7 +388,7 @@ export default function ExercisePage() {
                       onInput={(e) =>
                         handleSeek(Number((e.target as HTMLInputElement).value))
                       }
-                      className="w-full mt-3 accent-blue-600"
+                      className="mt-2 w-full accent-[#ff909e]"
                     />
                   </div>
 
@@ -314,7 +397,7 @@ export default function ExercisePage() {
                       <button
                         onClick={stepBack}
                         type="button"
-                        className="flex h-14 w-14 items-center bg-white justify-center rounded-full shadow-sm transition-transform hover:scale-[1.03] hover:bg-slate-100 dark:text-slate-600"
+                        className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-700 shadow-md transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg"
                         aria-label="Rewind 5 seconds"
                       >
                         <SkipBack size={22} />
@@ -323,7 +406,7 @@ export default function ExercisePage() {
                       <button
                         onClick={togglePlay}
                         type="button"
-                        className="flex h-16 w-16 items-center justify-center rounded-full text-white shadow-xl transition-transform duration-200 hover:scale-[1.03] dark:bg-slate-100 dark:text-slate-950"
+                        className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-r from-[#ff909e] to-[#fad0c4] text-white shadow-lg transition duration-200 hover:scale-[1.04] hover:shadow-xl"
                         aria-label={isPlaying ? "Pause" : "Play"}
                       >
                         {isPlaying ? <Pause size={26} /> : <Play size={26} />}
@@ -332,7 +415,7 @@ export default function ExercisePage() {
                       <button
                         onClick={stepForward}
                         type="button"
-                        className="flex h-14 w-14 items-center bg-white justify-center rounded-full shadow-sm transition-transform hover:scale-[1.03] hover:bg-slate-100 dark:text-slate-600"
+                        className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-700 shadow-md transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg"
                         aria-label="Forward 5 seconds"
                       >
                         <SkipForward size={22} />
@@ -347,7 +430,7 @@ export default function ExercisePage() {
                             volumeOpen ? setVolumeOpen(false) : openVolumeMenu()
                           }
                           type="button"
-                          className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+                          className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-md transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg"
                           aria-label="Volume"
                         >
                           <Volume2 size={18} />
@@ -362,14 +445,14 @@ export default function ExercisePage() {
                               top: volumePosition.top,
                               transform: "translateY(-100%)",
                               zIndex: 9999,
-                              width: "96px",
+                              width: "104px",
                             }}
-                            className="rounded-xl bg-white px-2 py-2 shadow-sm"
+                            className="rounded-2xl bg-white px-3 py-3 shadow-xl ring-1 ring-slate-100"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <div className="relative w-full">
                               <div
-                                className="pointer-events-none absolute -top-5 text-xs text-slate-600"
+                                className="pointer-events-none absolute -top-5 text-xs font-medium text-slate-600"
                                 style={{
                                   left: `${volume * 100}%`,
                                   transform: "translateX(-50%)",
@@ -387,7 +470,7 @@ export default function ExercisePage() {
                                 onChange={(e) =>
                                   handleVolumeChange(Number(e.target.value))
                                 }
-                                className="volume-slider w-full block"
+                                className="volume-slider block w-full"
                                 style={
                                   {
                                     "--progress": `${volume * 100}%`,

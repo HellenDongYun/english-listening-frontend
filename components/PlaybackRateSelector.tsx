@@ -56,14 +56,12 @@ const PlaybackRateSelector: React.FC<PlaybackRateSelectorProps> = ({
         ref={buttonRef}
         type="button"
         onClick={() => (isOpen ? setIsOpen(false) : openMenu())}
-        style={{
-          backgroundColor: "#f3f4f6",
-        }}
-        className="flex h-10 min-w-[72px] items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-200 "
+        className="flex h-10 min-w-[72px] items-center justify-center gap-2 rounded-xl bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
       >
         <SlidersHorizontal size={15} />
         <span>{playbackRate}x</span>
       </button>
+
       {/* 菜单 */}
       {isOpen && (
         <div
@@ -74,11 +72,10 @@ const PlaybackRateSelector: React.FC<PlaybackRateSelectorProps> = ({
             top: position.top,
             transform: "translateY(-100%)",
             zIndex: 9999,
-            width: "72px",
+            width: "84px",
           }}
-          className="rounded-xl bg-white py-1 shadow-xl "
+          className="overflow-hidden rounded-2xl bg-white py-1 shadow-xl ring-1 ring-slate-100"
         >
-          ß
           {rates.map((rateOption) => (
             <button
               key={rateOption}
@@ -87,10 +84,10 @@ const PlaybackRateSelector: React.FC<PlaybackRateSelectorProps> = ({
                 setPlaybackRate(rateOption);
                 setIsOpen(false);
               }}
-              className={`block w-full px-2 py-2 text-center text-sm transition ${
+              className={`block w-full px-3 py-2 text-center text-sm transition ${
                 playbackRate === rateOption
-                  ? "bg-slate-100 font-semibold text-slate-900 "
-                  : "text-slate-700 hover:bg-slate-50  "
+                  ? "bg-slate-100 font-semibold text-slate-900"
+                  : "text-slate-700 hover:bg-slate-50"
               }`}
             >
               {rateOption}x

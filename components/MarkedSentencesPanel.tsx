@@ -25,15 +25,17 @@ export default function MarkedSentencesPanel({
   onRemove,
 }: Props) {
   return (
-    <div className="sticky top-6 h-fit w-full rounded-xl border border-slate-200 bg-white p-6">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-medium text-slate-800">Marked Sentences</h3>
+    <div className="sticky top-6 h-fit w-full rounded-2xl bg-white p-6 shadow-md">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-slate-900">
+          Marked Sentences
+        </h3>
 
         {bookmarks.length > 0 && (
           <button
             type="button"
             onClick={onClear}
-            className="rounded-md px-2 py-1 text-xs text-red-500 transition hover:bg-red-50 hover:underline"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-50"
           >
             Clear all
           </button>
@@ -41,24 +43,26 @@ export default function MarkedSentencesPanel({
       </div>
 
       {bookmarks.length === 0 ? (
-        <p className="text-sm text-slate-500">
+        <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500 shadow-sm">
           Click the bookmark icon to save important sentences
-        </p>
+        </div>
       ) : (
-        <ul className="space-y-2 text-sm">
+        <ul className="space-y-3 text-sm">
           {bookmarks.map((b, i) => (
             <li
               key={`${b.startMs}-${i}`}
               onClick={() => seekTo(b.startMs)}
-              className="cursor-pointer rounded-lg bg-slate-100 p-3 transition hover:bg-slate-200"
+              className="cursor-pointer rounded-xl bg-slate-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:bg-white hover:shadow-md"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 gap-3">
-                  <span className="w-12 shrink-0 text-xs text-slate-500">
+                  <span className="mt-0.5 w-12 shrink-0 text-xs font-semibold text-slate-500">
                     {formatTime(b.startMs)}
                   </span>
 
-                  <span className="break-words text-slate-700">{b.text}</span>
+                  <span className="break-words leading-6 text-slate-700">
+                    {b.text}
+                  </span>
                 </div>
 
                 <button
@@ -67,7 +71,7 @@ export default function MarkedSentencesPanel({
                     e.stopPropagation();
                     onRemove(b.startMs);
                   }}
-                  className="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-slate-300 hover:text-red-500"
+                  className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
                   aria-label="Remove bookmarked sentence"
                   title="Remove"
                 >
