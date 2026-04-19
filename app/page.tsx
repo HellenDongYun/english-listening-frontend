@@ -5,30 +5,31 @@ import Hero from "@/components/Hero";
 import Stats from "@/components/Stats";
 import FilterBar from "@/components/FilterBar";
 import ExerciseGrid from "@/components/LessonGrid";
+import SelectCategoryBar from "@/components/SelectCategoryBar";
 
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedLevel, setSelectedLevel] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
-
+  const selectedLevel = "all";
   return (
     <main className="max-w-7xl mx-auto px-6 py-10 space-y-10">
       <Hero />
       <Stats />
-
-      <FilterBar
-        searchTerm={searchTerm}
-        selectedLevel={selectedLevel}
-        selectedCategory={selectedCategory}
-        onSearchChange={setSearchTerm}
-        onLevelChange={setSelectedLevel}
-        onCategoryChange={setSelectedCategory}
-      />
-
+      <div className="flex flex-col gap-4 md:flex-row md:items-center">
+        <FilterBar
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          placeholder="Search lessons..."
+        />
+        <SelectCategoryBar
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+        />
+      </div>
       <ExerciseGrid
         searchTerm={searchTerm}
-        selectedLevel={selectedLevel}
         selectedCategory={selectedCategory}
+        selectedLevel={selectedLevel}
       />
     </main>
   );

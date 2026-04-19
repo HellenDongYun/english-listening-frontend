@@ -5,7 +5,7 @@ import LessonCard from "./LessonCard";
 import { Lesson } from "@/types/lesson";
 import { LessonApiDto } from "@/types/api/lesson-api";
 import { mapLessonApiToLesson } from "@/mapper/lessonMapper";
-
+import Fuse from "fuse.js";
 type ExerciseGridProps = {
   searchTerm: string;
   selectedLevel: string;
@@ -39,41 +39,25 @@ export default function LessonGrid({
   }, []);
 
   const filteredLessons = useMemo(() => {
-    const keyword = searchTerm.trim().toLowerCase();
+    if (!lessons.length) return [];
 
-    return lessons.filter((lesson) => {
-      const lessonTitle = lesson.title?.toLowerCase() ?? "";
+    if (!searchTerm.trim()) return lessons;
 
-      const exercises = Array.isArray(lesson.exercises) ? lesson.exercises : [];
+    const data = lessons.map((lesson) => ({
+      ...lesson,
+      shortDesc: lesson.description?.slice(0, 100) ?? "",
+    }));
 
-      const matchesSearch =
-        !keyword ||
-        lessonTitle.includes(keyword) ||
-        exercises.some(
-          (exercise) =>
-            exercise.title?.toLowerCase().includes(keyword) ||
-            exercise.transcript?.toLowerCase().includes(keyword),
-        );
-
-      const matchesLevel =
-        selectedLevel === "all" ||
-        exercises.some(
-          (exercise) => String(exercise.difficulty) === selectedLevel,
-        );
-
-      // 当前后端如果没有 category 字段，这里只能先放行
-      const matchesCategory =
-        selectedCategory === "all" ||
-        exercises.some(
-          (exercise) =>
-            "category" in exercise &&
-            typeof exercise.category === "string" &&
-            exercise.category.toLowerCase() === selectedCategory.toLowerCase(),
-        );
-
-      return matchesSearch && matchesLevel && matchesCategory;
+    const fuse = new Fuse(data, {
+      threshold: 0.4,
+      keys: [
+        { name: "title", weight: 0.7 }, // ⭐重点
+        { name: "shortDesc", weight: 0.3 },
+      ],
     });
-  }, [lessons, searchTerm, selectedLevel, selectedCategory]);
+
+    return fuse.search(searchTerm).map((r) => r.item);
+  }, [lessons, searchTerm]);
 
   if (loading) return <p>Loading lessons...</p>;
 

@@ -1,82 +1,91 @@
 "use client";
 
-import { useRef } from "react";
-import { X } from "lucide-react";
+import { useRef, useState, useMemo } from "react";
+import { X, Search } from "lucide-react";
 
 type FilterBarProps = {
   searchTerm: string;
-  selectedLevel: string;
-  selectedCategory: string;
   onSearchChange: (value: string) => void;
-  onLevelChange: (value: string) => void;
-  onCategoryChange: (value: string) => void;
+  placeholder?: string;
+  // ===== 传入 suggestions 数据 =====
+  suggestions?: string[];
 };
 
 export default function FilterBar({
   searchTerm,
-  selectedLevel,
-  selectedCategory,
   onSearchChange,
-  onLevelChange,
-  onCategoryChange,
+  suggestions = [],
 }: FilterBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // ===== 自动过滤建议 =====
+  const filteredSuggestions = useMemo(() => {
+    if (!searchTerm) return [];
+
+    const keyword = searchTerm.toLowerCase();
+
+    return suggestions
+      .filter((s) => s.toLowerCase().includes(keyword))
+      .slice(0, 5);
+  }, [searchTerm, suggestions]);
 
   return (
-    <div className="flex gap-4 items-center">
-      {/* 🔍 Search Input */}
-      <div className="relative flex-1">
+    <div className="relative flex-1">
+      {/* ===== 输入框 ===== */}
+      <div className="relative">
+        {/* 🔍 icon */}
+        <Search
+          size={16}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+        />
+
         <input
           ref={inputRef}
           value={searchTerm}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
           onChange={(e) => onSearchChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              onSearchChange("");
-              inputRef.current?.focus(); // 🔥 ESC 清空后重新 focus
-            }
-          }}
           placeholder="Search exercises..."
-          className="w-full rounded-xl bg-white px-4 py-2 pr-10 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#ff909e]/40 focus:shadow-md transition placeholder:text-gray-400"
+          className="w-full rounded-xl bg-white pl-9 pr-10 py-2 shadow-sm 
+          hover:shadow-md 
+          focus:outline-none 
+          focus:ring-2 focus:ring-[#ff909e]/40 
+          focus:shadow-md 
+          transition placeholder:text-gray-400"
         />
 
-        {/* ❌ Clear Button */}
+        {/* ❌ clear */}
         {searchTerm && (
           <button
             onClick={() => {
               onSearchChange("");
-              inputRef.current?.focus(); // 🔥 点击 X 后也自动 focus
+              inputRef.current?.focus();
             }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
           >
             <X size={16} />
           </button>
         )}
       </div>
 
-      {/* Level */}
-      <select
-        value={selectedLevel}
-        onChange={(e) => onLevelChange(e.target.value)}
-        className="rounded-xl bg-white px-4 py-2 text-gray-700 cursor-pointer shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#ff909e]/40 focus:shadow-md transition"
-      >
-        <option value="all">All Levels</option>
-        <option value="1">Beginner</option>
-        <option value="2">Intermediate</option>
-        <option value="3">Advanced</option>
-      </select>
-
-      {/* Category */}
-      <select
-        value={selectedCategory}
-        onChange={(e) => onCategoryChange(e.target.value)}
-        className="rounded-xl bg-white px-4 py-2 text-gray-700 cursor-pointer shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#ff909e]/40 focus:shadow-md transition"
-      >
-        <option value="all">All Categories</option>
-        <option value="business">Business</option>
-        <option value="daily-life">Daily Life</option>
-        <option value="academic">Academic</option>
-      </select>
+      {/* ===== 下拉建议 ===== */}
+      {showSuggestions && filteredSuggestions.length > 0 && (
+        <div className="absolute z-50 mt-2 w-full rounded-xl bg-white shadow-lg border border-gray-100 overflow-hidden">
+          {filteredSuggestions.map((item, i) => (
+            <div
+              key={i}
+              onClick={() => {
+                onSearchChange(item);
+                setShowSuggestions(false);
+              }}
+              className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer transition"
+            >
+              {item}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
