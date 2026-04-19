@@ -1,6 +1,6 @@
 // lib/mappers/lesson.mapper.ts
 import { LessonApiDto } from "@/types/api/lesson-api";
-import { Lesson } from "types/ui/lesson-ui";
+import { Lesson } from "types/lesson";
 
 function mapDifficulty(level?: number): "Easy" | "Medium" | "Hard" {
   if (level === 2) return "Medium";
@@ -21,6 +21,9 @@ export function mapLessonApiToLesson(api: LessonApiDto): Lesson {
     title: api.title,
     description: api.description ?? "",
 
+    // ===== 修改 1：把后端返回的 imagePath 映射过来 =====
+    imagePath: api.imagePath ?? undefined,
+
     // UI 补的
     category: "Conversation",
     level: "Beginner",
@@ -33,11 +36,15 @@ export function mapLessonApiToLesson(api: LessonApiDto): Lesson {
       id: ex.id,
       title: ex.title,
       transcript: ex.transcript,
-      difficulty: mapDifficulty(ex.difficulty),
-      duration: formatDuration(ex.durationSeconds),
+      audioUrl: ex.audioUrl ?? ex.audio?.url ?? "",
+
+      // 关键修改：给默认值
+      difficulty: ex.difficulty ?? 1,
+      durationSeconds: ex.durationSeconds ?? 0,
+
+      duration: formatDuration(ex.durationSeconds ?? 0),
       isCompleted: false,
       progress: 0,
-      audioUrl: ex.audioUrl ?? ex.audio?.url,
     })),
   };
 }

@@ -7,6 +7,7 @@ export interface LessonApiDto {
   progress?: number;
   completedExercises?: number;
   exercises: ExerciseApiDto[];
+  imagePath?: string | null;
 }
 
 export interface ExerciseApiDto {

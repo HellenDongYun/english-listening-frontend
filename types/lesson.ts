@@ -5,6 +5,10 @@ export interface LessonExercise {
   audioUrl: string;
   difficulty: number;
   durationSeconds: number;
+
+  duration: string;
+  isCompleted: boolean;
+  progress: number;
 }
 
 export interface Lesson {
@@ -20,4 +24,5 @@ export interface Lesson {
   learners: number;
 
   exercises: LessonExercise[];
+  imagePath?: string; //
 }

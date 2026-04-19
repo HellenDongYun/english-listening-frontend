@@ -1,31 +1,42 @@
 import { Lesson } from "@/types/lesson";
 import Link from "next/link";
 import HighlightText from "@/components/HighlightText";
+import Image from "next/image";
 type Props = {
   lesson: Lesson;
   searchTerm: string;
 };
 export default function LessonCard({ lesson, searchTerm }: Props) {
+  const desc = lesson.description ?? "";
+  const baseUrl = "http://localhost:5142";
+  const imageSrc = lesson.imagePath
+    ? `${baseUrl}${lesson.imagePath}`
+    : "/default-cover.jpg";
+  console.log("imageSrc =", imageSrc);
   return (
     <div className="rounded-2xl bg-white p-5 flex flex-col justify-between shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-200">
+      {/* Cover image */}
+      <div className="h-44 w-full overflow-hidden bg-slate-100 relative">
+        <Image
+          src={imageSrc || "/default-cover.jpg"}
+          alt={lesson.title}
+          fill
+          unoptimized
+          className="object-contain transition duration-300 hover:scale-105"
+        />
+      </div>
       <div className="space-y-2">
-        <span className="inline-block text-xs px-3 py-1 rounded-full bg-gray-100">
-          <HighlightText text={lesson.level} keyword={searchTerm} />
-        </span>
-
-        <p className="text-sm text-gray-500">
-          <HighlightText text={lesson.category} keyword={searchTerm} />
-        </p>
-
         <h3 className="font-semibold text-lg">
           <HighlightText text={lesson.title} keyword={searchTerm} />
         </h3>
 
         <p className="text-sm text-gray-600">
-          <HighlightText text={lesson.description} keyword={searchTerm} />
+          <HighlightText
+            text={desc.length > 60 ? desc.slice(0, 60) + "..." : desc}
+            keyword={searchTerm}
+          />
         </p>
       </div>
-
       <div className="mt-4 space-y-3">
         <div className="flex justify-between items-center">
           {/* ✅ 关键修复点 */}
