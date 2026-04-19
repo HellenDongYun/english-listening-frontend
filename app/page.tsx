@@ -10,6 +10,7 @@ import SelectCategoryBar from "@/components/SelectCategoryBar";
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const selectedLevel = "all";
   return (
     <main className="max-w-7xl mx-auto px-6 py-10 space-y-10">
@@ -20,6 +21,7 @@ export default function Home() {
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           placeholder="Search lessons..."
+          suggestions={suggestions}
         />
         <SelectCategoryBar
           selectedCategory={selectedCategory}
@@ -30,6 +32,7 @@ export default function Home() {
         searchTerm={searchTerm}
         selectedCategory={selectedCategory}
         selectedLevel={selectedLevel}
+        setSuggestions={setSuggestions}
       />
     </main>
   );

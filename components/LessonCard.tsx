@@ -12,7 +12,7 @@ export default function LessonCard({ lesson, searchTerm }: Props) {
   const imageSrc = lesson.imagePath
     ? `${baseUrl}${lesson.imagePath}`
     : "/default-cover.jpg";
-  console.log("imageSrc =", imageSrc);
+
   return (
     <div className="rounded-2xl bg-white p-5 flex flex-col justify-between shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-200">
       {/* Cover image */}

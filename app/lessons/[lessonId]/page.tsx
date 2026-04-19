@@ -175,7 +175,7 @@ export default function LessonDetailPage() {
     exerciseProgressMap,
   ]);
 
-  // ===== 修改 1：生成 suggestion 数据 =====
+  // ==== 生成 suggestion 数据 =====
   const searchSuggestions = useMemo(() => {
     if (!lesson?.exercises) return [];
 

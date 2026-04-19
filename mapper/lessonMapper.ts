@@ -21,11 +21,11 @@ export function mapLessonApiToLesson(api: LessonApiDto): Lesson {
     title: api.title,
     description: api.description ?? "",
 
-    // ===== 修改 1：把后端返回的 imagePath 映射过来 =====
+    // ===== 把后端返回的 imagePath 映射过来 =====
     imagePath: api.imagePath ?? undefined,
 
     // UI 补的
-    category: "Conversation",
+    category: getCategoryFromTitle(api.title),
     level: "Beginner",
     rating: 4.8,
     duration: `${api.exercises.length * 5} min`,
@@ -47,4 +47,55 @@ export function mapLessonApiToLesson(api: LessonApiDto): Lesson {
       progress: 0,
     })),
   };
+}
+
+// ===== 根据 title 自动分类category =====
+export function getCategoryFromTitle(title: string): string {
+  const t = title.toLowerCase();
+
+  // ===== IELTS =====
+  if (t.includes("ielts")) {
+    return "ielts";
+  }
+
+  // ===== TOEFL =====
+  if (t.includes("toefl")) {
+    return "toefl";
+  }
+
+  // ===== Career / Business =====
+  if (
+    t.includes("career") ||
+    t.includes("job") ||
+    t.includes("interview") ||
+    t.includes("resume") ||
+    t.includes("work") ||
+    t.includes("business")
+  ) {
+    return "career";
+  }
+
+  // ===== Academic =====
+  if (
+    t.includes("academic") ||
+    t.includes("lecture") ||
+    t.includes("university") ||
+    t.includes("study")
+  ) {
+    return "academic";
+  }
+
+  // ===== Daily =====
+  if (
+    t.includes("daily") ||
+    t.includes("conversation") ||
+    t.includes("life") ||
+    t.includes("shopping") ||
+    t.includes("travel")
+  ) {
+    return "daily";
+  }
+
+  // ===== 默认 =====
+  return "other";
 }
