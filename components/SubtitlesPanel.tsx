@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bookmark, Search } from "lucide-react";
 import type { Subtitle } from "@/types/subtitle";
-
+import HighlightText from "@/components/HighlightText";
 type SubtitlesPanelProps = {
   subtitles: Subtitle[];
   activeIndex: number;
@@ -113,7 +113,7 @@ export default function SubtitlesPanel({
 
                     {/* text */}
                     <p className="min-w-0 text-sm leading-6 break-words">
-                      {s.text}
+                      <HighlightText text={s.text} keyword={searchTerm} />
                     </p>
                   </div>
 
