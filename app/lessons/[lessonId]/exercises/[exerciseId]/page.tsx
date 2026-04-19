@@ -35,10 +35,17 @@ export default function ExercisePage() {
   const [currentMs, setCurrentMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
 
-  const [bookmarks, setBookmarks] = useState<Subtitle[]>(() => {
-    if (typeof window === "undefined") return [];
-    const saved = localStorage.getItem("bookmarks");
-    return saved ? JSON.parse(saved) : [];
+  // ===== 修改 1：bookmarks 用统一 store =====
+  const [bookmarkStore, setBookmarkStore] = useState<
+    Record<string, Subtitle[]>
+  >(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const saved = localStorage.getItem("bookmarkStore");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
   });
 
   const [rate, setRate] = useState(1);
@@ -48,6 +55,33 @@ export default function ExercisePage() {
   const volumeMenuRef = useRef<HTMLDivElement>(null);
   const volumeButtonRef = useRef<HTMLButtonElement>(null);
   const [volumePosition, setVolumePosition] = useState({ top: 0, left: 0 });
+
+  // ===== 修改 2：统一唯一 key =====
+  const storeKey = useMemo(() => {
+    if (!lessonId || !exerciseId) return "";
+    return `${lessonId}_${exerciseId}`;
+  }, [lessonId, exerciseId]);
+
+  const bookmarkKey = useMemo(() => {
+    if (!storeKey) return "";
+    return `bookmarks_${storeKey}`;
+  }, [storeKey]);
+
+  const progressKey = useMemo(() => {
+    if (!storeKey) return "";
+    return `progress_${storeKey}`;
+  }, [storeKey]);
+
+  const completedKey = useMemo(() => {
+    if (!storeKey) return "";
+    return `completed_${storeKey}`;
+  }, [storeKey]);
+
+  // ===== 修改 3：当前 exercise 的 bookmarks =====
+  const bookmarks = useMemo(() => {
+    if (!bookmarkKey) return [];
+    return bookmarkStore[bookmarkKey] ?? [];
+  }, [bookmarkStore, bookmarkKey]);
 
   const openVolumeMenu = () => {
     if (!volumeButtonRef.current) return;
@@ -63,20 +97,39 @@ export default function ExercisePage() {
     setVolumeOpen(true);
   };
 
+  // ===== 修改 4：只同步 bookmarkStore 到 localStorage =====
   useEffect(() => {
-    localStorage.setItem("bookmarks", JSON.stringify(bookmarks));
-  }, [bookmarks]);
+    if (typeof window === "undefined") return;
+
+    try {
+      localStorage.setItem("bookmarkStore", JSON.stringify(bookmarkStore));
+    } catch (error) {
+      console.error("Failed to save bookmark store", error);
+    }
+  }, [bookmarkStore]);
 
   useEffect(() => {
     currentMsRef.current = currentMs;
   }, [currentMs]);
 
   const clearBookmarks = () => {
-    setBookmarks([]);
+    if (!bookmarkKey) return;
+
+    setBookmarkStore((prev) => ({
+      ...prev,
+      [bookmarkKey]: [],
+    }));
   };
 
   const removeBookmark = (startMs: number) => {
-    setBookmarks((prev) => prev.filter((b) => b.startMs !== startMs));
+    if (!bookmarkKey) return;
+
+    setBookmarkStore((prev) => ({
+      ...prev,
+      [bookmarkKey]: (prev[bookmarkKey] ?? []).filter(
+        (b) => b.startMs !== startMs,
+      ),
+    }));
   };
 
   useEffect(() => {
@@ -120,15 +173,18 @@ export default function ExercisePage() {
     }));
   }, [exercise]);
 
+  // ===== 修改 5：保存进度写入 progressStore =====
   const saveExerciseProgress = (ms: number) => {
+    if (!progressKey) return;
+
     try {
       const safeMs = Math.max(0, Math.floor(ms));
-      const saved = localStorage.getItem("exerciseProgress");
+      const saved = localStorage.getItem("progressStore");
       const parsed: Record<string, number> = saved ? JSON.parse(saved) : {};
 
-      parsed[String(exerciseId)] = safeMs;
+      parsed[progressKey] = safeMs;
 
-      localStorage.setItem("exerciseProgress", JSON.stringify(parsed));
+      localStorage.setItem("progressStore", JSON.stringify(parsed));
     } catch (error) {
       console.error("Failed to save progress", error);
     }
@@ -165,12 +221,13 @@ export default function ExercisePage() {
       setDurationMs(totalDurationMs);
 
       try {
-        const savedProgress = localStorage.getItem("exerciseProgress");
+        // ===== 修改 6：恢复进度从 progressStore 读 =====
+        const savedProgress = localStorage.getItem("progressStore");
         const parsed: Record<string, number> = savedProgress
           ? JSON.parse(savedProgress)
           : {};
 
-        const savedMs = parsed[String(exerciseId)] ?? 0;
+        const savedMs = progressKey ? (parsed[progressKey] ?? 0) : 0;
 
         if (savedMs > 0 && totalDurationMs > 0) {
           const safeMs = Math.min(savedMs, Math.max(totalDurationMs - 300, 0));
@@ -202,25 +259,29 @@ export default function ExercisePage() {
       setIsPlaying(false);
 
       try {
-        const savedCompleted = localStorage.getItem("completedExercises");
-        const completedList: string[] = savedCompleted
+        // ===== 修改 7：完成状态写入 completedStore =====
+        const savedCompleted = localStorage.getItem("completedStore");
+        const completedMap: Record<string, boolean> = savedCompleted
           ? JSON.parse(savedCompleted)
-          : [];
+          : {};
 
-        if (!completedList.includes(String(exerciseId))) {
-          localStorage.setItem(
-            "completedExercises",
-            JSON.stringify([...completedList, String(exerciseId)]),
-          );
+        if (completedKey) {
+          completedMap[completedKey] = true;
         }
 
-        const savedProgress = localStorage.getItem("exerciseProgress");
+        localStorage.setItem("completedStore", JSON.stringify(completedMap));
+
+        // ===== 修改 8：完成后删除 progressStore 当前项 =====
+        const savedProgress = localStorage.getItem("progressStore");
         const progressMap: Record<string, number> = savedProgress
           ? JSON.parse(savedProgress)
           : {};
 
-        delete progressMap[String(exerciseId)];
-        localStorage.setItem("exerciseProgress", JSON.stringify(progressMap));
+        if (progressKey) {
+          delete progressMap[progressKey];
+        }
+
+        localStorage.setItem("progressStore", JSON.stringify(progressMap));
       } catch (error) {
         console.error("Failed to mark exercise complete", error);
       }
@@ -242,7 +303,7 @@ export default function ExercisePage() {
         wsRef.current = null;
       }
     };
-  }, [audioUrl, exerciseId]);
+  }, [audioUrl, progressKey, completedKey]);
 
   const handleRateChange = (newRate: number) => {
     setRate(newRate);
@@ -321,11 +382,19 @@ export default function ExercisePage() {
   };
 
   const toggleBookmark = (s: Subtitle) => {
-    setBookmarks((prev) =>
-      prev.find((b) => b.startMs === s.startMs)
-        ? prev.filter((b) => b.startMs !== s.startMs)
-        : [...prev, s],
-    );
+    if (!bookmarkKey) return;
+
+    setBookmarkStore((prev) => {
+      const currentBookmarks = prev[bookmarkKey] ?? [];
+      const exists = currentBookmarks.find((b) => b.startMs === s.startMs);
+
+      return {
+        ...prev,
+        [bookmarkKey]: exists
+          ? currentBookmarks.filter((b) => b.startMs !== s.startMs)
+          : [...currentBookmarks, s],
+      };
+    });
   };
 
   const activeIndex = subtitles.findIndex(
@@ -360,7 +429,7 @@ export default function ExercisePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(360px,1fr)]">
+          <div className="grid grid-cols-1 gap-4 items-start lg:grid-cols-[minmax(0,2fr)_minmax(360px,1fr)]">
             <div className="in-w-0 space-y-6">
               <div className="rounded-[32px] bg-white p-6 shadow-[0_12px_40px_rgba(15,23,42,0.08)]">
                 <div className="overflow-hidden rounded-[24px] bg-slate-50 p-4 shadow-inner">
@@ -496,12 +565,14 @@ export default function ExercisePage() {
               />
             </div>
 
-            <MarkedSentencesPanel
-              bookmarks={bookmarks}
-              seekTo={seekTo}
-              onClear={clearBookmarks}
-              onRemove={removeBookmark}
-            />
+            <div className="self-start">
+              <MarkedSentencesPanel
+                bookmarks={bookmarks}
+                seekTo={seekTo}
+                onClear={clearBookmarks}
+                onRemove={removeBookmark}
+              />
+            </div>
           </div>
         </div>
       </div>

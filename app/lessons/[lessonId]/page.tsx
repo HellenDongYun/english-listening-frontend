@@ -8,6 +8,7 @@ import FilterBar from "@/components/FilterBar";
 import SelectLevelBar from "@/components/SelectLevelBar";
 import HighlightText from "@/components/HighlightText";
 import Fuse from "fuse.js";
+
 function difficultyToText(level?: number) {
   switch (level) {
     case 1:
@@ -27,16 +28,20 @@ export default function LessonDetailPage() {
   const lessonId = params.lessonId as string;
 
   const [lesson, setLesson] = useState<LessonApiDto | null>(null);
-  const [completedExerciseIds, setCompletedExerciseIds] = useState<string[]>(
-    [],
+
+  // ===== 修改 1：completedExercises 数组 → completedStore 对象 =====
+  const [completedStore, setCompletedStore] = useState<Record<string, boolean>>(
+    {},
   );
-  const [exerciseProgressMap, setExerciseProgressMap] = useState<
-    Record<string, number>
-  >({});
+
+  // ===== 修改 2：exerciseProgressMap 保留为对象，但改成统一 store 语义 =====
+  const [progressStore, setProgressStore] = useState<Record<string, number>>(
+    {},
+  );
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // =====  search 和 level state =====
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedLevel, setSelectedLevel] = useState("all");
 
@@ -68,30 +73,29 @@ export default function LessonDetailPage() {
   }, [lessonId]);
 
   useEffect(() => {
-    const savedCompleted = localStorage.getItem("completedExercises");
-    const savedProgress = localStorage.getItem("exerciseProgress");
+    // ===== 修改 3：读取统一 completedStore =====
+    const savedCompleted = localStorage.getItem("completedStore");
+    const savedProgress = localStorage.getItem("progressStore");
 
     if (savedCompleted) {
       try {
-        const parsed: string[] = JSON.parse(savedCompleted);
-        setCompletedExerciseIds(parsed);
+        const parsed: Record<string, boolean> = JSON.parse(savedCompleted);
+        setCompletedStore(parsed);
       } catch {
-        setCompletedExerciseIds([]);
+        setCompletedStore({});
       }
     }
 
     if (savedProgress) {
       try {
         const parsed: Record<string, number> = JSON.parse(savedProgress);
-        setExerciseProgressMap(parsed);
+        setProgressStore(parsed);
       } catch {
-        setExerciseProgressMap({});
+        setProgressStore({});
       }
     }
   }, []);
 
-  // ===== 动态生成 level options）=====
-  // 依据 lesson.exercises 里实际存在的 difficulty 去生成
   const availableLevels = useMemo(() => {
     if (!lesson?.exercises) return [];
 
@@ -106,18 +110,19 @@ export default function LessonDetailPage() {
     return uniqueLevels;
   }, [lesson]);
 
-  // ===== 根据 search + level 过滤 exercises =====
   const filteredExercises = useMemo(() => {
     if (!lesson?.exercises) return [];
 
     const keyword = searchTerm.trim();
 
-    // =====  searchable 数据 =====
     const searchable = lesson.exercises.map((ex) => {
-      const isCompleted =
-        ex.isCompleted || completedExerciseIds.includes(ex.id);
+      // ===== 修改 4：统一 key =====
+      const exerciseKey = `${lessonId}_${ex.id}`;
 
-      const savedProgressMs = exerciseProgressMap[ex.id] ?? 0;
+      const isCompleted =
+        ex.isCompleted || completedStore[`completed_${exerciseKey}`] === true;
+
+      const savedProgressMs = progressStore[`progress_${exerciseKey}`] ?? 0;
       const isInProgress = !isCompleted && savedProgressMs > 0;
 
       const statusText = isCompleted
@@ -135,7 +140,6 @@ export default function LessonDetailPage() {
       };
     });
 
-    // ===== 如果没输入 keyword，直接返回 =====
     if (!keyword) {
       return searchable.filter((ex) => {
         return (
@@ -145,11 +149,10 @@ export default function LessonDetailPage() {
       });
     }
 
-    // ===== Fuse 配置（核心）=====
     const fuse = new Fuse(searchable, {
-      threshold: 0.4, // 越小越严格（0.3~0.5 推荐）
+      threshold: 0.4,
       keys: [
-        { name: "title", weight: 0.5 }, //  最重要
+        { name: "title", weight: 0.5 },
         { name: "difficultyText", weight: 0.2 },
         { name: "statusText", weight: 0.2 },
         { name: "transcript", weight: 0.1 },
@@ -157,11 +160,8 @@ export default function LessonDetailPage() {
     });
 
     const results = fuse.search(keyword);
-
-    // ===== 取出结果 =====
     const matched = results.map((r) => r.item);
 
-    // ===== 叠加 level filter =====
     return matched.filter((ex) => {
       return (
         selectedLevel === "all" || String(ex.difficulty ?? "") === selectedLevel
@@ -169,30 +169,29 @@ export default function LessonDetailPage() {
     });
   }, [
     lesson,
+    lessonId,
     searchTerm,
     selectedLevel,
-    completedExerciseIds,
-    exerciseProgressMap,
+    completedStore,
+    progressStore,
   ]);
 
-  // ==== 生成 suggestion 数据 =====
   const searchSuggestions = useMemo(() => {
     if (!lesson?.exercises) return [];
 
     const values = new Set<string>();
 
     lesson.exercises.forEach((ex) => {
-      // title
       values.add(ex.title);
-
-      // difficulty
       values.add(difficultyToText(ex.difficulty));
 
-      // status
-      const isCompleted =
-        ex.isCompleted || completedExerciseIds.includes(ex.id);
+      // ===== 修改 5：suggestion 里的状态也改成统一 store =====
+      const exerciseKey = `${lessonId}_${ex.id}`;
 
-      const savedProgressMs = exerciseProgressMap[ex.id] ?? 0;
+      const isCompleted =
+        ex.isCompleted || completedStore[`completed_${exerciseKey}`] === true;
+
+      const savedProgressMs = progressStore[`progress_${exerciseKey}`] ?? 0;
       const isInProgress = !isCompleted && savedProgressMs > 0;
 
       values.add(
@@ -205,7 +204,7 @@ export default function LessonDetailPage() {
     });
 
     return Array.from(values);
-  }, [lesson, completedExerciseIds, exerciseProgressMap]);
+  }, [lesson, lessonId, completedStore, progressStore]);
 
   if (loading) return <div className="p-6">Loading...</div>;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
@@ -235,7 +234,6 @@ export default function LessonDetailPage() {
         </div>
       </div>
 
-      {/* ===== 加入 search + level filter UI ===== */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center">
         <FilterBar
           searchTerm={searchTerm}
@@ -243,9 +241,6 @@ export default function LessonDetailPage() {
           suggestions={searchSuggestions}
         />
 
-        {/* 
-           SelectLevelBar 支持 options prop
-        */}
         <SelectLevelBar
           selectedLevel={selectedLevel}
           onLevelChange={setSelectedLevel}
@@ -254,18 +249,23 @@ export default function LessonDetailPage() {
       </div>
 
       <div className="space-y-4">
-        {/* ===== 渲染 filteredExercises ===== */}
         {filteredExercises.length === 0 ? (
           <div className="rounded-2xl bg-white p-6 text-center text-sm text-gray-500 shadow-md">
             No exercises found.
           </div>
         ) : (
           filteredExercises.map((ex, index) => {
-            const isCompleted =
-              ex.isCompleted || completedExerciseIds.includes(ex.id);
+            // ===== 修改 6：渲染时也统一使用 store key =====
+            const exerciseKey = `${lessonId}_${ex.id}`;
 
-            const savedProgressMs = exerciseProgressMap[ex.id] ?? 0;
+            const isCompleted =
+              ex.isCompleted ||
+              completedStore[`completed_${exerciseKey}`] === true;
+
+            const savedProgressMs =
+              progressStore[`progress_${exerciseKey}`] ?? 0;
             const isInProgress = !isCompleted && savedProgressMs > 0;
+
             const statusText = isCompleted
               ? "Completed"
               : isInProgress
@@ -298,7 +298,6 @@ export default function LessonDetailPage() {
                       />
                     </span>
 
-                    {/* ===== status 高亮 ===== */}
                     <span
                       className={`rounded-full px-3 py-1 font-medium ${
                         isCompleted
