@@ -75,7 +75,7 @@ export default function SubtitlesPanel({
       </div>
 
       {/* list */}
-      <div className="max-h-[520px] space-y-2 overflow-y-auto pr-2">
+      <div className="max-h-130 space-y-2 overflow-y-auto pr-2">
         {filteredSubtitles.length === 0 ? (
           <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500 shadow-sm">
             No subtitles matched your search.
@@ -96,7 +96,7 @@ export default function SubtitlesPanel({
                 onClick={() => seekTo(s.startMs)}
                 className={`cursor-pointer rounded-xl p-3 transition ${
                   active
-                    ? "relative bg-gradient-to-r from-[#ff909e]/20 to-[#fad0c4]/20 text-slate-900 shadow-md before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-[#ff909e] before:rounded-l-xl"
+                    ? "relative bg-linear-to-r from-[#ff909e]/20 to-[#fad0c4]/20 text-slate-900 shadow-md before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-[#ff909e] before:rounded-l-xl"
                     : "bg-slate-50 shadow-sm hover:-translate-y-0.5 hover:bg-white hover:shadow-md"
                 }`}
               >
@@ -112,7 +112,7 @@ export default function SubtitlesPanel({
                     </span>
 
                     {/* text */}
-                    <p className="min-w-0 text-sm leading-6 break-words">
+                    <p className="min-w-0 text-sm leading-6 wrap-break-words">
                       <HighlightText text={s.text} keyword={searchTerm} />
                     </p>
                   </div>

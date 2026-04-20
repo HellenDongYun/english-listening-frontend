@@ -42,7 +42,7 @@ export default function LessonCard({ lesson, searchTerm }: Props) {
           {/* ✅ 关键修复点 */}
           <Link
             href={`/lessons/${lesson.id}`}
-            className="bg-gradient-to-r from-[#ff909e] to-[#fad0c4] text-gray-700 px-4 py-2 rounded-lg text-sm shadow-sm hover:opacity-90 active:scale-95 transition"
+            className="bg-linear-to-r from-[#ff909e] to-[#fad0c4] text-gray-700 px-4 py-2 rounded-lg text-sm shadow-sm hover:opacity-90 active:scale-95 transition"
           >
             Start →
           </Link>

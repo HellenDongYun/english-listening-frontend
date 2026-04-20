@@ -2,11 +2,11 @@
 import { LessonApiDto } from "@/types/api/lesson-api";
 import { Lesson } from "types/lesson";
 
-function mapDifficulty(level?: number): "Easy" | "Medium" | "Hard" {
-  if (level === 2) return "Medium";
-  if (level === 3) return "Hard";
-  return "Easy";
-}
+// function mapDifficulty(level?: number): "Easy" | "Medium" | "Hard" {
+//   if (level === 2) return "Medium";
+//   if (level === 3) return "Hard";
+//   return "Easy";
+// }
 
 function formatDuration(seconds?: number): string {
   if (!seconds) return "0:00";

@@ -322,7 +322,7 @@ export default function LessonDetailPage() {
                         ? "bg-green-600 hover:bg-green-700"
                         : isInProgress
                           ? "bg-amber-500 hover:bg-amber-600"
-                          : "bg-gradient-to-r from-[#ff909e] to-[#fad0c4] hover:opacity-90"
+                          : "bg-linear-to-r from-[#ff909e] to-[#fad0c4] hover:opacity-90"
                     }`}
                   >
                     {isCompleted

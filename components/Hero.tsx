@@ -4,7 +4,7 @@ export default function Hero() {
       <h1 className="text-4xl font-bold leading-tight">
         <span className="relative inline-block">
           {/* 高亮背景（更高 + 更往上） */}
-          <span className="absolute -top-2 -left-2 z-0 h-[85%] w-[110%] rounded-md bg-gradient-to-r from-[#ff909e] to-[#fad0c4] opacity-80 rotate-[-2deg]" />
+          <span className="absolute -top-2 -left-2 z-0 h-[85%] w-[110%] rounded-md bg-linear-to-r from-[#ff909e] to-[#fad0c4] opacity-80 -rotate-2" />
 
           {/* 文字（往右移一点） */}
           <span className="relative z-10 ml-2 text-5xl font-extrabold">

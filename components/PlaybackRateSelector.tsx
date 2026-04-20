@@ -56,7 +56,7 @@ const PlaybackRateSelector: React.FC<PlaybackRateSelectorProps> = ({
         ref={buttonRef}
         type="button"
         onClick={() => (isOpen ? setIsOpen(false) : openMenu())}
-        className="flex h-10 min-w-[72px] items-center justify-center gap-2 rounded-xl bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+        className="flex h-10 min-w-18 items-center justify-center gap-2 rounded-xl bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
       >
         <SlidersHorizontal size={15} />
         <span>{playbackRate}x</span>

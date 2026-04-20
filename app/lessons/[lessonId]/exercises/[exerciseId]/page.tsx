@@ -16,7 +16,7 @@ import SubtitlesPanel from "../../../../../components/SubtitlesPanel";
 import MarkedSentencesPanel from "@/components/MarkedSentencesPanel";
 import type { ExerciseDetailDto } from "@/types/exercise";
 import type { Subtitle } from "@/types/subtitle";
-
+import type { BookmarkItem } from "@/types/BookMarkItem";
 export default function ExercisePage() {
   const router = useRouter();
   const { lessonId, exerciseId } = useParams<{
@@ -35,9 +35,14 @@ export default function ExercisePage() {
   const [currentMs, setCurrentMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
 
-  // ===== 修改 1：bookmarks 用统一 store =====
+  const [playOnceSegment, setPlayOnceSegment] = useState<{
+    startMs: number;
+    endMs: number;
+  } | null>(null);
+
+  // ===== bookmarks store =====
   const [bookmarkStore, setBookmarkStore] = useState<
-    Record<string, Subtitle[]>
+    Record<string, BookmarkItem[]>
   >(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -56,7 +61,7 @@ export default function ExercisePage() {
   const volumeButtonRef = useRef<HTMLButtonElement>(null);
   const [volumePosition, setVolumePosition] = useState({ top: 0, left: 0 });
 
-  // ===== 修改 2：统一唯一 key =====
+  // ===== 统一唯一 key =====
   const storeKey = useMemo(() => {
     if (!lessonId || !exerciseId) return "";
     return `${lessonId}_${exerciseId}`;
@@ -77,7 +82,8 @@ export default function ExercisePage() {
     return `completed_${storeKey}`;
   }, [storeKey]);
 
-  // ===== 修改 3：当前 exercise 的 bookmarks =====
+  // ===== 当前 exercise 的 bookmarks =====
+  //bookmarks 现在自动是 BookmarkItem[]
   const bookmarks = useMemo(() => {
     if (!bookmarkKey) return [];
     return bookmarkStore[bookmarkKey] ?? [];
@@ -97,7 +103,7 @@ export default function ExercisePage() {
     setVolumeOpen(true);
   };
 
-  // ===== 修改 4：只同步 bookmarkStore 到 localStorage =====
+  // ===== 只同步 bookmarkStore 到 localStorage =====
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -173,7 +179,7 @@ export default function ExercisePage() {
     }));
   }, [exercise]);
 
-  // ===== 修改 5：保存进度写入 progressStore =====
+  // ===== 保存进度写入 progressStore =====
   const saveExerciseProgress = (ms: number) => {
     if (!progressKey) return;
 
@@ -221,7 +227,7 @@ export default function ExercisePage() {
       setDurationMs(totalDurationMs);
 
       try {
-        // ===== 修改 6：恢复进度从 progressStore 读 =====
+        // ===== 恢复进度从 progressStore 读 =====
         const savedProgress = localStorage.getItem("progressStore");
         const parsed: Record<string, number> = savedProgress
           ? JSON.parse(savedProgress)
@@ -250,6 +256,12 @@ export default function ExercisePage() {
         const ms = sec * 1000;
         setCurrentMs(ms);
         currentMsRef.current = ms;
+        // 如果是 Marked Sentence 单句播放，到 endMs 自动暂停 =====
+        if (playOnceSegment && ms >= playOnceSegment.endMs) {
+          ws.pause();
+          setIsPlaying(false);
+          setPlayOnceSegment(null);
+        }
       }
     });
 
@@ -259,7 +271,7 @@ export default function ExercisePage() {
       setIsPlaying(false);
 
       try {
-        // ===== 修改 7：完成状态写入 completedStore =====
+        // ===== 完成状态写入 completedStore =====
         const savedCompleted = localStorage.getItem("completedStore");
         const completedMap: Record<string, boolean> = savedCompleted
           ? JSON.parse(savedCompleted)
@@ -271,7 +283,7 @@ export default function ExercisePage() {
 
         localStorage.setItem("completedStore", JSON.stringify(completedMap));
 
-        // ===== 修改 8：完成后删除 progressStore 当前项 =====
+        // ===== 完成后删除 progressStore 当前项 =====
         const savedProgress = localStorage.getItem("progressStore");
         const progressMap: Record<string, number> = savedProgress
           ? JSON.parse(savedProgress)
@@ -373,6 +385,30 @@ export default function ExercisePage() {
     setIsPlaying(true);
   };
 
+  // ===== 右侧 Marked Sentence 专用，只播放当前句 =====
+  const playMarkedSentence = (startMs: number, endMs: number) => {
+    if (!wsRef.current) return;
+
+    const duration = wsRef.current.getDuration() * 1000;
+    if (duration <= 0) return;
+
+    const safeStart = Math.max(0, Math.min(startMs, duration));
+    const safeEnd = Math.max(safeStart, Math.min(endMs, duration));
+
+    setPlayOnceSegment({
+      startMs: safeStart,
+      endMs: safeEnd,
+    });
+
+    wsRef.current.seekTo(safeStart / duration);
+    setCurrentMs(safeStart);
+    currentMsRef.current = safeStart;
+    saveExerciseProgress(safeStart);
+
+    wsRef.current.play();
+    setIsPlaying(true);
+  };
+
   const stepBack = () => {
     seekTo(Math.max(0, currentMs - 5000));
   };
@@ -381,6 +417,7 @@ export default function ExercisePage() {
     seekTo(Math.min(durationMs || 0, currentMs + 5000));
   };
 
+  // 新增 bookmark 时补上 note / starred / category
   const toggleBookmark = (s: Subtitle) => {
     if (!bookmarkKey) return;
 
@@ -392,7 +429,30 @@ export default function ExercisePage() {
         ...prev,
         [bookmarkKey]: exists
           ? currentBookmarks.filter((b) => b.startMs !== s.startMs)
-          : [...currentBookmarks, s],
+          : [
+              ...currentBookmarks,
+              {
+                ...s,
+                note: "",
+                starred: false,
+                category: "default",
+              },
+            ],
+      };
+    });
+  };
+  // 新增 updateBookmark，不改你现有命名体系
+  const updateBookmark = (startMs: number, updates: Partial<BookmarkItem>) => {
+    if (!bookmarkKey) return;
+
+    setBookmarkStore((prev) => {
+      const currentBookmarks = prev[bookmarkKey] ?? [];
+
+      return {
+        ...prev,
+        [bookmarkKey]: currentBookmarks.map((item) =>
+          item.startMs === startMs ? { ...item, ...updates } : item,
+        ),
       };
     });
   };
@@ -431,15 +491,15 @@ export default function ExercisePage() {
 
           <div className="grid grid-cols-1 gap-4 items-start lg:grid-cols-[minmax(0,2fr)_minmax(360px,1fr)]">
             <div className="in-w-0 space-y-6">
-              <div className="rounded-[32px] bg-white p-6 shadow-[0_12px_40px_rgba(15,23,42,0.08)]">
-                <div className="overflow-hidden rounded-[24px] bg-slate-50 p-4 shadow-inner">
+              <div className="rounded-4xl bg-white p-6 shadow-[0_12px_40px_rgba(15,23,42,0.08)]">
+                <div className="overflow-hidden rounded-3xl bg-slate-50 p-4 shadow-inner">
                   <div
                     ref={waveformRef}
                     className="h-20 w-full rounded-[20px] bg-slate-100"
                   />
                 </div>
 
-                <div className="mt-5 overflow-visible rounded-[24px] bg-slate-50/80 p-4 shadow-sm">
+                <div className="mt-5 overflow-visible rounded-3xl bg-slate-50/80 p-4 shadow-sm">
                   <div className="mb-5">
                     <div className="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
                       <span>{formatTime(currentMs)}</span>
@@ -471,7 +531,7 @@ export default function ExercisePage() {
                       <button
                         onClick={togglePlay}
                         type="button"
-                        className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-r from-[#ff909e] to-[#fad0c4] text-white shadow-lg transition duration-200 hover:scale-[1.04] hover:shadow-xl"
+                        className="flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-r from-[#ff909e] to-[#fad0c4] text-white shadow-lg transition duration-200 hover:scale-[1.04] hover:shadow-xl"
                         aria-label={isPlaying ? "Pause" : "Play"}
                       >
                         {isPlaying ? <Pause size={26} /> : <Play size={26} />}
@@ -568,9 +628,10 @@ export default function ExercisePage() {
             <div className="self-start">
               <MarkedSentencesPanel
                 bookmarks={bookmarks}
-                seekTo={seekTo}
+                seekTo={(startMs, endMs) => playMarkedSentence(startMs, endMs)}
                 onClear={clearBookmarks}
                 onRemove={removeBookmark}
+                onUpdate={updateBookmark}
               />
             </div>
           </div>

@@ -242,7 +242,7 @@ export default function LessonGrid({
                 onClick={() => goToPage(page)}
                 className={`rounded-lg px-4 py-2 text-sm shadow-sm transition ${
                   isActive
-                    ? "bg-gradient-to-r from-[#ff909e] to-[#fad0c4] text-gray-800"
+                    ? "bg-linear-to-r from-[#ff909e] to-[#fad0c4] text-gray-800"
                     : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                 }`}
               >
