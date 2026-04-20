@@ -10,6 +10,7 @@ import {
   SkipForward,
   Volume2,
   ArrowLeft,
+  Repeat,
 } from "lucide-react";
 import PlaybackRateSelector from "../../../../../components/PlaybackRateSelector";
 import SubtitlesPanel from "../../../../../components/SubtitlesPanel";
@@ -17,6 +18,7 @@ import MarkedSentencesPanel from "@/components/MarkedSentencesPanel";
 import type { ExerciseDetailDto } from "@/types/exercise";
 import type { Subtitle } from "@/types/subtitle";
 import type { BookmarkItem } from "@/types/BookMarkItem";
+
 export default function ExercisePage() {
   const router = useRouter();
   const { lessonId, exerciseId } = useParams<{
@@ -27,6 +29,16 @@ export default function ExercisePage() {
   const waveformRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
   const currentMsRef = useRef(0);
+  // ===== 新增 ref，给 WaveSurfer 事件读取最新状态，不触发重建 =====
+  const playOnceSegmentRef = useRef<{
+    startMs: number;
+    endMs: number;
+  } | null>(null);
+
+  const loopSegmentRef = useRef<{
+    startMs: number;
+    endMs: number;
+  } | null>(null);
 
   const [exercise, setExercise] = useState<ExerciseDetailDto | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -40,7 +52,12 @@ export default function ExercisePage() {
     endMs: number;
   } | null>(null);
 
-  // ===== bookmarks store =====
+  // ===== 修改 1：单句循环状态 =====
+  const [loopSegment, setLoopSegment] = useState<{
+    startMs: number;
+    endMs: number;
+  } | null>(null);
+
   const [bookmarkStore, setBookmarkStore] = useState<
     Record<string, BookmarkItem[]>
   >(() => {
@@ -61,7 +78,6 @@ export default function ExercisePage() {
   const volumeButtonRef = useRef<HTMLButtonElement>(null);
   const [volumePosition, setVolumePosition] = useState({ top: 0, left: 0 });
 
-  // ===== 统一唯一 key =====
   const storeKey = useMemo(() => {
     if (!lessonId || !exerciseId) return "";
     return `${lessonId}_${exerciseId}`;
@@ -82,8 +98,6 @@ export default function ExercisePage() {
     return `completed_${storeKey}`;
   }, [storeKey]);
 
-  // ===== 当前 exercise 的 bookmarks =====
-  //bookmarks 现在自动是 BookmarkItem[]
   const bookmarks = useMemo(() => {
     if (!bookmarkKey) return [];
     return bookmarkStore[bookmarkKey] ?? [];
@@ -103,7 +117,6 @@ export default function ExercisePage() {
     setVolumeOpen(true);
   };
 
-  // ===== 只同步 bookmarkStore 到 localStorage =====
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -150,6 +163,16 @@ export default function ExercisePage() {
       .catch(console.error);
   }, [lessonId, exerciseId]);
 
+  // ===== 同步 playOnceSegment 到 ref =====
+  useEffect(() => {
+    playOnceSegmentRef.current = playOnceSegment;
+  }, [playOnceSegment]);
+
+  // ===== ：同步 loopSegment 到 ref =====
+  useEffect(() => {
+    loopSegmentRef.current = loopSegment;
+  }, [loopSegment]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -179,7 +202,13 @@ export default function ExercisePage() {
     }));
   }, [exercise]);
 
-  // ===== 保存进度写入 progressStore =====
+  const currentSubtitle = useMemo(() => {
+    return (
+      subtitles.find((s) => currentMs >= s.startMs && currentMs < s.endMs) ??
+      null
+    );
+  }, [subtitles, currentMs]);
+
   const saveExerciseProgress = (ms: number) => {
     if (!progressKey) return;
 
@@ -227,7 +256,6 @@ export default function ExercisePage() {
       setDurationMs(totalDurationMs);
 
       try {
-        // ===== 恢复进度从 progressStore 读 =====
         const savedProgress = localStorage.getItem("progressStore");
         const parsed: Record<string, number> = savedProgress
           ? JSON.parse(savedProgress)
@@ -251,16 +279,40 @@ export default function ExercisePage() {
       }
     });
 
+    // ===== 修改 2：播放状态只交给 WaveSurfer 事件管理 =====
+    ws.on("play", () => {
+      if (!cancelled) {
+        setIsPlaying(true);
+      }
+    });
+
+    ws.on("pause", () => {
+      if (!cancelled) {
+        setIsPlaying(false);
+      }
+    });
+
     ws.on("timeupdate", (sec) => {
       if (!cancelled) {
         const ms = sec * 1000;
         setCurrentMs(ms);
         currentMsRef.current = ms;
-        // 如果是 Marked Sentence 单句播放，到 endMs 自动暂停 =====
-        if (playOnceSegment && ms >= playOnceSegment.endMs) {
+
+        const currentPlayOnceSegment = playOnceSegmentRef.current;
+        if (currentPlayOnceSegment && ms >= currentPlayOnceSegment.endMs) {
           ws.pause();
-          setIsPlaying(false);
           setPlayOnceSegment(null);
+          return;
+        }
+
+        const currentLoopSegment = loopSegmentRef.current;
+        if (currentLoopSegment && ms >= currentLoopSegment.endMs) {
+          const totalDuration = ws.getDuration() * 1000;
+          if (totalDuration > 0) {
+            ws.seekTo(currentLoopSegment.startMs / totalDuration);
+            setCurrentMs(currentLoopSegment.startMs);
+            currentMsRef.current = currentLoopSegment.startMs;
+          }
         }
       }
     });
@@ -268,10 +320,11 @@ export default function ExercisePage() {
     ws.on("finish", () => {
       if (cancelled) return;
 
-      setIsPlaying(false);
+      // ===== 修改 5：完整播完时清理模式，但不手动 setIsPlaying =====
+      setPlayOnceSegment(null);
+      setLoopSegment(null);
 
       try {
-        // ===== 完成状态写入 completedStore =====
         const savedCompleted = localStorage.getItem("completedStore");
         const completedMap: Record<string, boolean> = savedCompleted
           ? JSON.parse(savedCompleted)
@@ -283,7 +336,6 @@ export default function ExercisePage() {
 
         localStorage.setItem("completedStore", JSON.stringify(completedMap));
 
-        // ===== 完成后删除 progressStore 当前项 =====
         const savedProgress = localStorage.getItem("progressStore");
         const progressMap: Record<string, number> = savedProgress
           ? JSON.parse(savedProgress)
@@ -348,6 +400,11 @@ export default function ExercisePage() {
     if (!wsRef.current || durationMs === 0) return;
 
     const clamped = Math.max(0, Math.min(value, durationMs));
+
+    // ===== 修改 6：手动拖动时，退出单句播放和单句循环 =====
+    setPlayOnceSegment(null);
+    setLoopSegment(null);
+
     wsRef.current.seekTo(clamped / durationMs);
     setCurrentMs(clamped);
     currentMsRef.current = clamped;
@@ -357,9 +414,12 @@ export default function ExercisePage() {
   const togglePlay = () => {
     if (!wsRef.current) return;
 
-    const wasPlaying = isPlaying;
+    // ===== 修改 7：主播放按钮只退出单句播放，不手动 setIsPlaying =====
+    setPlayOnceSegment(null);
+
+    const wasPlaying = wsRef.current.isPlaying();
+
     wsRef.current.playPause();
-    setIsPlaying((p) => !p);
 
     if (wasPlaying) {
       const latestMs = wsRef.current.getCurrentTime() * 1000;
@@ -377,15 +437,17 @@ export default function ExercisePage() {
 
     const clamped = Math.max(0, Math.min(ms, duration));
 
+    // ===== 修改 8：普通字幕点击时，退出单句播放和单句循环 =====
+    setPlayOnceSegment(null);
+    setLoopSegment(null);
+
     wsRef.current.seekTo(clamped / duration);
     setCurrentMs(clamped);
     currentMsRef.current = clamped;
     saveExerciseProgress(clamped);
     wsRef.current.play();
-    setIsPlaying(true);
   };
 
-  // ===== 右侧 Marked Sentence 专用，只播放当前句 =====
   const playMarkedSentence = (startMs: number, endMs: number) => {
     if (!wsRef.current) return;
 
@@ -394,6 +456,9 @@ export default function ExercisePage() {
 
     const safeStart = Math.max(0, Math.min(startMs, duration));
     const safeEnd = Math.max(safeStart, Math.min(endMs, duration));
+
+    // ===== 修改 9：右侧单句播放时，退出单句循环，不手动 setIsPlaying =====
+    setLoopSegment(null);
 
     setPlayOnceSegment({
       startMs: safeStart,
@@ -406,18 +471,57 @@ export default function ExercisePage() {
     saveExerciseProgress(safeStart);
 
     wsRef.current.play();
-    setIsPlaying(true);
+  };
+
+  const toggleCurrentSentenceLoop = () => {
+    if (!wsRef.current || !currentSubtitle || durationMs === 0) return;
+
+    const sameLoop =
+      loopSegment &&
+      loopSegment.startMs === currentSubtitle.startMs &&
+      loopSegment.endMs === currentSubtitle.endMs;
+
+    // ===== 修改 10：如果当前已经在循环这一句，就关闭循环 =====
+    if (sameLoop) {
+      setLoopSegment(null);
+      return;
+    }
+
+    // 开启循环时，关闭单句播放模式
+    setPlayOnceSegment(null);
+
+    const nextLoop = {
+      startMs: currentSubtitle.startMs,
+      endMs: currentSubtitle.endMs,
+    };
+
+    setLoopSegment(nextLoop);
+
+    wsRef.current.seekTo(currentSubtitle.startMs / durationMs);
+    setCurrentMs(currentSubtitle.startMs);
+    currentMsRef.current = currentSubtitle.startMs;
+    saveExerciseProgress(currentSubtitle.startMs);
+
+    // ===== 修改 11：只有当前没在播放时才 play，不手动 setIsPlaying =====
+    if (!wsRef.current.isPlaying()) {
+      wsRef.current.play();
+    }
   };
 
   const stepBack = () => {
+    // ===== 修改 12：前进后退时退出单句播放和单句循环 =====
+    setPlayOnceSegment(null);
+    setLoopSegment(null);
     seekTo(Math.max(0, currentMs - 5000));
   };
 
   const stepForward = () => {
+    // ===== 修改 13：前进后退时退出单句播放和单句循环 =====
+    setPlayOnceSegment(null);
+    setLoopSegment(null);
     seekTo(Math.min(durationMs || 0, currentMs + 5000));
   };
 
-  // 新增 bookmark 时补上 note / starred / category
   const toggleBookmark = (s: Subtitle) => {
     if (!bookmarkKey) return;
 
@@ -441,7 +545,7 @@ export default function ExercisePage() {
       };
     });
   };
-  // 新增 updateBookmark，不改你现有命名体系
+
   const updateBookmark = (startMs: number, updates: Partial<BookmarkItem>) => {
     if (!bookmarkKey) return;
 
@@ -460,6 +564,12 @@ export default function ExercisePage() {
   const activeIndex = subtitles.findIndex(
     (s) => currentMs >= s.startMs && currentMs < s.endMs,
   );
+
+  const isLoopingCurrentSentence =
+    !!currentSubtitle &&
+    !!loopSegment &&
+    loopSegment.startMs === currentSubtitle.startMs &&
+    loopSegment.endMs === currentSubtitle.endMs;
 
   if (!exercise) {
     return <div className="p-10 text-center">Loading...</div>;
@@ -545,6 +655,27 @@ export default function ExercisePage() {
                       >
                         <SkipForward size={22} />
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={toggleCurrentSentenceLoop}
+                        disabled={!currentSubtitle}
+                        className={`flex h-14 w-14 items-center justify-center rounded-full shadow-md transition duration-200 ${
+                          isLoopingCurrentSentence
+                            ? "bg-emerald-100 text-emerald-600 hover:bg-emerald-200"
+                            : "bg-white text-slate-700 hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg"
+                        } disabled:cursor-not-allowed disabled:opacity-50`}
+                        aria-label="Loop current sentence"
+                        title={
+                          currentSubtitle
+                            ? isLoopingCurrentSentence
+                              ? "Stop sentence loop"
+                              : "Loop current sentence"
+                            : "No active sentence"
+                        }
+                      >
+                        <Repeat size={22} />
+                      </button>
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -613,6 +744,13 @@ export default function ExercisePage() {
                       />
                     </div>
                   </div>
+
+                  {isLoopingCurrentSentence && currentSubtitle && (
+                    <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                      Sentence loop is on: {formatTime(currentSubtitle.startMs)}{" "}
+                      - {formatTime(currentSubtitle.endMs)}
+                    </div>
+                  )}
                 </div>
               </div>
 
