@@ -18,7 +18,7 @@ import MarkedSentencesPanel from "@/components/MarkedSentencesPanel";
 import type { ExerciseDetailDto } from "@/types/exercise";
 import type { Subtitle } from "@/types/subtitle";
 import type { BookmarkItem } from "@/types/BookmarkItem";
-
+import { capitalize } from "@/utils/text";
 export default function ExercisePage() {
   const router = useRouter();
   const { lessonId, exerciseId } = useParams<{
@@ -592,7 +592,7 @@ export default function ExercisePage() {
 
           <div>
             <h1 className="text-2xl font-semibold text-black">
-              {exercise.title}
+              {capitalize(exercise.title)}
             </h1>
             <p className="text-sm text-gray-500">
               Practice listening with interactive subtitles

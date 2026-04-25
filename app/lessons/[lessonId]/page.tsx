@@ -8,7 +8,7 @@ import FilterBar from "@/components/FilterBar";
 import SelectLevelBar from "@/components/SelectLevelBar";
 import HighlightText from "@/components/HighlightText";
 import Fuse from "fuse.js";
-
+import { capitalize } from "@/utils/text";
 function difficultyToText(level?: number) {
   switch (level) {
     case 1:
@@ -29,12 +29,12 @@ export default function LessonDetailPage() {
 
   const [lesson, setLesson] = useState<LessonApiDto | null>(null);
 
-  // ===== 修改 1：completedExercises 数组 → completedStore 对象 =====
+  // ===== completedExercises 数组 → completedStore 对象 =====
   const [completedStore, setCompletedStore] = useState<Record<string, boolean>>(
     {},
   );
 
-  // ===== 修改 2：exerciseProgressMap 保留为对象，但改成统一 store 语义 =====
+  // ===== exerciseProgressMap 保留为对象，但改成统一 store 语义 =====
   const [progressStore, setProgressStore] = useState<Record<string, number>>(
     {},
   );
@@ -73,7 +73,7 @@ export default function LessonDetailPage() {
   }, [lessonId]);
 
   useEffect(() => {
-    // ===== 修改 3：读取统一 completedStore =====
+    // ===== 读取统一 completedStore =====
     const savedCompleted = localStorage.getItem("completedStore");
     const savedProgress = localStorage.getItem("progressStore");
 
@@ -116,7 +116,7 @@ export default function LessonDetailPage() {
     const keyword = searchTerm.trim();
 
     const searchable = lesson.exercises.map((ex) => {
-      // ===== 修改 4：统一 key =====
+      // ===== 统一 key =====
       const exerciseKey = `${lessonId}_${ex.id}`;
 
       const isCompleted =
@@ -185,7 +185,7 @@ export default function LessonDetailPage() {
       values.add(ex.title);
       values.add(difficultyToText(ex.difficulty));
 
-      // ===== 修改 5：suggestion 里的状态也改成统一 store =====
+      // ===== suggestion 里的状态也改成统一 store =====
       const exerciseKey = `${lessonId}_${ex.id}`;
 
       const isCompleted =
@@ -221,10 +221,10 @@ export default function LessonDetailPage() {
       </button>
 
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">{lesson.title}</h1>
+        <h1 className="text-3xl font-bold">{capitalize(lesson.title)}</h1>
 
         {lesson.description && (
-          <p className="text-gray-600">{lesson.description}</p>
+          <p className="text-gray-600">{capitalize(lesson.description)}</p>
         )}
 
         <div className="flex items-center gap-4 text-sm text-gray-500">
@@ -255,7 +255,7 @@ export default function LessonDetailPage() {
           </div>
         ) : (
           filteredExercises.map((ex, index) => {
-            // ===== 修改 6：渲染时也统一使用 store key =====
+            // ===== 渲染时也统一使用 store key =====
             const exerciseKey = `${lessonId}_${ex.id}`;
 
             const isCompleted =
@@ -285,7 +285,10 @@ export default function LessonDetailPage() {
 
                     <div className="min-w-0">
                       <div className="truncate text-lg font-semibold text-slate-900">
-                        <HighlightText text={ex.title} keyword={searchTerm} />
+                        <HighlightText
+                          text={capitalize(ex.title)}
+                          keyword={searchTerm}
+                        />
                       </div>
                     </div>
                   </div>
