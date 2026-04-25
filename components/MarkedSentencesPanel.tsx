@@ -1,8 +1,6 @@
-"use client";
-
 import { useMemo, useState } from "react";
 import { Star, X } from "lucide-react";
-import type { BookmarkItem } from "@/types/BookMarkItem";
+import type { BookmarkItem } from "@/types/BookmarkItem";
 import HighlightText from "@/components/HighlightText";
 
 type Props = {

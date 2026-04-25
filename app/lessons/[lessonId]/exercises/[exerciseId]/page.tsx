@@ -17,7 +17,7 @@ import SubtitlesPanel from "../../../../../components/SubtitlesPanel";
 import MarkedSentencesPanel from "@/components/MarkedSentencesPanel";
 import type { ExerciseDetailDto } from "@/types/exercise";
 import type { Subtitle } from "@/types/subtitle";
-import type { BookmarkItem } from "@/types/BookMarkItem";
+import type { BookmarkItem } from "@/types/BookmarkItem";
 
 export default function ExercisePage() {
   const router = useRouter();
