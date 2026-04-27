@@ -1,6 +1,6 @@
 import type { AdminLesson } from "../create/types";
 
-export const API_BASE_URL = "http://localhost:5142";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL!;
 
 export async function getLessons(): Promise<AdminLesson[]> {
   const response = await fetch(`${API_BASE_URL}/api/lessons`);

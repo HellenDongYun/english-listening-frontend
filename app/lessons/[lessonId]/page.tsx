@@ -9,6 +9,7 @@ import SelectLevelBar from "@/components/SelectLevelBar";
 import HighlightText from "@/components/HighlightText";
 import Fuse from "fuse.js";
 import { capitalize } from "@/utils/text";
+import { API_BASE_URL } from "@/lib/api";
 function difficultyToText(level?: number) {
   switch (level) {
     case 1:
@@ -49,7 +50,7 @@ export default function LessonDetailPage() {
     async function loadLesson() {
       try {
         const res = await fetch(
-          `http://localhost:5142/api/lessons/${lessonId}`,
+          `${API_BASE_URL}/api/lessons/${lessonId}`,
           {
             cache: "no-store",
           },

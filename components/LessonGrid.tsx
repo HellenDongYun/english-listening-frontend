@@ -3,7 +3,7 @@ import LessonCard from "./LessonCard";
 import { Lesson } from "@/types/lesson";
 import { LessonApiDto } from "@/types/api/lesson-api";
 import { mapLessonApiToLesson } from "@/mapper/lessonMapper";
-
+import { API_BASE_URL } from "@/lib/api";
 type ExerciseGridProps = {
   searchTerm: string;
   selectedLevel: string;
@@ -30,7 +30,7 @@ export default function LessonGrid({
   useEffect(() => {
     async function loadLessons() {
       try {
-        const res = await fetch("http://localhost:5142/api/lessons");
+        const res = await fetch(`${API_BASE_URL}/api/lessons`);
         const data: LessonApiDto[] = await res.json();
 
         const mapped = data.map(mapLessonApiToLesson);

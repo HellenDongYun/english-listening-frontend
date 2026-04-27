@@ -3,6 +3,7 @@ import Link from "next/link";
 import HighlightText from "@/components/HighlightText";
 import Image from "next/image";
 import { capitalize, truncate } from "@/utils/text";
+import { API_BASE_URL } from "@/lib/api";
 type Props = {
   lesson: Lesson;
   searchTerm: string;
@@ -10,7 +11,7 @@ type Props = {
 export default function LessonCard({ lesson, searchTerm }: Props) {
   const desc = lesson.description ?? "";
   const displayDesc = truncate(desc, 60);
-  const baseUrl = "http://localhost:5142";
+  const baseUrl = API_BASE_URL;
   const imageSrc = lesson.imagePath
     ? `${baseUrl}${lesson.imagePath}`
     : "/default-cover.jpg";
