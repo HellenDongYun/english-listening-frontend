@@ -1,4 +1,4 @@
-"use client";
+//"use client";
 
 type SelectCategoryBarProps = {
   selectedCategory: string;
@@ -21,6 +21,10 @@ export default function SelectCategoryBar({
       <option value="career">Career</option>
       <option value="academic">Academic</option>
       <option value="daily">Daily</option>
+      <option value="ted">TED</option>
+      <option value="bbc">BBC</option>
+      <option value="npr">NPR</option>
+      <option value="podcast">Podcast</option>
     </select>
   );
 }

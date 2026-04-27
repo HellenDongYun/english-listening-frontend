@@ -52,6 +52,10 @@ export function mapLessonApiToLesson(api: LessonApiDto): Lesson {
 // ===== 根据 title 自动分类category =====
 export function getCategoryFromTitle(title: string): string {
   const t = title.toLowerCase();
+  if (t.includes("ted")) return "TED";
+  if (t.includes("bbc")) return "BBC";
+  if (t.includes("npr")) return "NPR";
+  if (t.includes("podcast")) return "Podcast";
 
   // ===== IELTS =====
   if (t.includes("ielts")) {
@@ -70,6 +74,7 @@ export function getCategoryFromTitle(title: string): string {
     t.includes("interview") ||
     t.includes("resume") ||
     t.includes("work") ||
+    t.includes("tech") ||
     t.includes("business")
   ) {
     return "career";
@@ -89,13 +94,12 @@ export function getCategoryFromTitle(title: string): string {
   if (
     t.includes("daily") ||
     t.includes("conversation") ||
-    t.includes("life") ||
+    t.includes("everyday") ||
     t.includes("shopping") ||
     t.includes("travel")
   ) {
     return "daily";
   }
-
   // ===== 默认 =====
   return "other";
 }

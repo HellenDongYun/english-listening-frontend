@@ -150,7 +150,27 @@ export default function ExercisePage() {
       ),
     }));
   };
+  const buildFileUrl = (path?: string | null) => {
+    if (!path) return "";
 
+    // 已经是完整 URL
+    if (path.startsWith("http")) {
+      return path;
+    }
+
+    // 已经带 /uploads
+    if (path.startsWith("/uploads")) {
+      return `http://localhost:5142${path}`;
+    }
+
+    // 新结构：audio/xxx.m4a
+    if (path.startsWith("audio/") || path.startsWith("subtitles/")) {
+      return `http://localhost:5142/uploads/${path}`;
+    }
+
+    // 旧数据：xxx.m4a（在 uploads 根目录）
+    return `http://localhost:5142/uploads/${path}`;
+  };
   useEffect(() => {
     fetch(
       `http://localhost:5142/api/lessons/${lessonId}/exercises/${exerciseId}`,
@@ -158,7 +178,7 @@ export default function ExercisePage() {
       .then((res) => res.json())
       .then((data: ExerciseDetailDto) => {
         setExercise(data);
-        setAudioUrl(`http://localhost:5142${data.audioUrl}`);
+        setAudioUrl(buildFileUrl(data.audioUrl));
       })
       .catch(console.error);
   }, [lessonId, exerciseId]);
